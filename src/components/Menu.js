@@ -15,7 +15,9 @@ function Menu() {
   const tableNumber = new URLSearchParams(location.search).get('table') || 'Unknown';
 
   const fetchMenu = () => {
-    axios.get('http://localhost:5000/api/menu')
+    // axios.get('http://localhost:5000/api/menu')
+    // Render Testing
+    axios.get('https://cafe-backend-ay2n.onrender.com/')
       .then(res => {
         console.log('Menu items fetched:', res.data);
         setMenuItems(res.data);
@@ -63,7 +65,7 @@ function Menu() {
       };
       const itemCategory = item.category || 'Uncategorized';
       const itemImage = item.image
-        ? `http://localhost:5000${item.image}`
+        ? `https://cafe-backend-ay2n.onrender.com/${item.image}`
         : placeholderImages[itemCategory] || 'https://source.unsplash.com/100x100/?food';
 
       if (existingItem) {
@@ -103,7 +105,7 @@ function Menu() {
   };
 
   const placeOrder = () => {
-    axios.post('http://localhost:5000/api/orders', {
+    axios.post('https://cafe-backend-ay2n.onrender.com/api/orders', {
       tableNumber: parseInt(tableNumber),
       items: cart.map(item => ({ itemId: item.itemId, quantity: item.quantity }))
     })
@@ -202,7 +204,7 @@ function Menu() {
                 <img
                   src={
                     item.image
-                      ? `http://localhost:5000${item.image}`
+                      ? `https://cafe-backend-ay2n.onrender.com/${item.image}`
                       : 'https://source.unsplash.com/100x100/?food'
                   }
                   alt={item.name}

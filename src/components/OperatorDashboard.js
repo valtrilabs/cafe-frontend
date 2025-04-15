@@ -31,10 +31,10 @@ function OperatorDashboard() {
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
     const url = tab === 'Today'
-      ? `http://localhost:5000/api/orders?dateFrom=${todayStart.toISOString()}&dateTo=${now.toISOString()}`
+      ? `https://cafe-backend-ay2n.onrender.com/api/orders?dateFrom=${todayStart.toISOString()}&dateTo=${now.toISOString()}`
       : tab === 'Past Orders'
-      ? `http://localhost:5000/api/orders?dateTo=${todayStart.toISOString()}`
-      : `http://localhost:5000/api/orders?status=${tab.toLowerCase()}`;
+      ? `https://cafe-backend-ay2n.onrender.com/api/orders?dateTo=${todayStart.toISOString()}`
+      : `https://cafe-backend-ay2n.onrender.com/api/orders?status=${tab.toLowerCase()}`;
     axios.get(url)
       .then(res => {
         console.log('Orders fetched:', res.data);
@@ -69,7 +69,7 @@ function OperatorDashboard() {
   };
 
   const fetchMenuItems = () => {
-    axios.get('http://localhost:5000/api/menu')
+    axios.get('https://cafe-backend-ay2n.onrender.com/api/menu')
       .then(res => {
         console.log('Menu items fetched:', res.data);
         setMenuItems(res.data);
@@ -81,7 +81,7 @@ function OperatorDashboard() {
   };
 
   const fetchAnalytics = () => {
-    axios.get('http://localhost:5000/api/orders/analytics')
+    axios.get('https://cafe-backend-ay2n.onrender.com/api/orders/analytics')
       .then(res => {
         console.log('Analytics fetched:', res.data);
         setAnalytics(res.data);
@@ -104,7 +104,7 @@ function OperatorDashboard() {
   }, [activeTab]);
 
   const handleStatusUpdate = (orderId, status) => {
-    axios.put(`http://localhost:5000/api/orders/${orderId}`, { status })
+    axios.put(`https://cafe-backend-ay2n.onrender.com/api/orders/${orderId}`, { status })
       .then(() => {
         fetchOrders(activeTab === 'Today' ? 'Today' : activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
       })
@@ -130,7 +130,7 @@ function OperatorDashboard() {
   };
 
   const handleSaveEdit = () => {
-    axios.put(`http://localhost:5000/api/orders/${editingOrder._id}`, {
+    axios.put(`https://cafe-backend-ay2n.onrender.com/api/orders/${editingOrder._id}`, {
       tableNumber: editingOrder.tableNumber,
       items: editingOrder.items.map(item => ({
         itemId: item.itemId,
@@ -150,7 +150,7 @@ function OperatorDashboard() {
 
   const handleCancelOrder = (orderId) => {
     if (window.confirm('Cancel this order?')) {
-      axios.delete(`http://localhost:5000/api/orders/${orderId}`)
+      axios.delete(`https://cafe-backend-ay2n.onrender.com/api/orders/${orderId}`)
         .then(() => {
           fetchOrders(activeTab === 'Today' ? 'Today' : activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
         })
@@ -173,7 +173,7 @@ function OperatorDashboard() {
       formData.append('image', newItem.image);
     }
 
-    axios.post('http://localhost:5000/api/menu', formData, {
+    axios.post('https://cafe-backend-ay2n.onrender.com/api/menu', formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
       .then(() => {
@@ -196,7 +196,7 @@ function OperatorDashboard() {
 
   const handleDeleteMenuItem = (itemId) => {
     if (window.confirm('Delete this menu item?')) {
-      axios.delete(`http://localhost:5000/api/menu/${itemId}`)
+      axios.delete(`https://cafe-backend-ay2n.onrender.com/api/menu/${itemId}`)
         .then(() => {
           fetchMenuItems();
           setError(null);
@@ -209,7 +209,7 @@ function OperatorDashboard() {
   };
 
   const handleToggleAvailability = (itemId, isAvailable) => {
-    axios.put(`http://localhost:5000/api/menu/${itemId}`, { isAvailable: !isAvailable })
+    axios.put(`https://cafe-backend-ay2n.onrender.com/api/menu/${itemId}`, { isAvailable: !isAvailable })
       .then(() => {
         fetchMenuItems();
         setError(null);
@@ -529,7 +529,7 @@ function OperatorDashboard() {
                   <div className="flex items-center mb-2 sm:mb-0">
                     {item.image ? (
                       <img
-                        src={`http://localhost:5000${item.image}`}
+                        src={`https://cafe-backend-ay2n.onrender.com${item.image}`}
                         alt={item.name}
                         className="w-16 h-16 object-cover rounded-lg mr-4"
                       />

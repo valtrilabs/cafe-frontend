@@ -16,7 +16,7 @@ function PaymentDashboard() {
   const [activeTable, setActiveTable] = useState('All');
 
   const fetchOrders = () => {
-    axios.get('http://localhost:5000/api/orders')
+    axios.get('https://cafe-backend-ay2n.onrender.com/api/orders')
       .then(res => {
         console.log('Orders fetched:', res.data);
         // Sort orders by createdAt descending (newest first)
@@ -91,7 +91,7 @@ function PaymentDashboard() {
   }, []);
 
   const handleMarkPaid = (orderId) => {
-    axios.put(`http://localhost:5000/api/orders/${orderId}`, { status: 'Completed' })
+    axios.put(`https://cafe-backend-ay2n.onrender.com/api/orders/${orderId}`, { status: 'Completed' })
       .then(() => {
         fetchOrders();
       })
