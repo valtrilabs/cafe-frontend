@@ -9,7 +9,7 @@ function QRCodeGenerator() {
         {[1, 2, 3, 4, 5, 6].map(table => (
           <div key={table} className="text-center">
             <h2 className="font-semibold">Table {table}</h2>
-            <QRCodeCanvas value={`http://localhost:3000/order?table=${table}`} />
+            <QRCodeCanvas value={`https://cafe-frontend-pi.vercel.app/order?table=${table}`} />
           </div>
         ))}
       </div>
