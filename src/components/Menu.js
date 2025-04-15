@@ -17,7 +17,7 @@ function Menu() {
   const fetchMenu = () => {
     // axios.get('http://localhost:5000/api/menu')
     // Render Testing
-    axios.get('https://cafe-backend-ay2n.onrender.com/')
+    axios.get('https://cafe-backend-ay2n.onrender.com/api/menu')
       .then(res => {
         console.log('Menu items fetched:', res.data);
         setMenuItems(res.data);
