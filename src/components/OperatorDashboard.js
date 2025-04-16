@@ -31,15 +31,14 @@ function OperatorDashboard() {
     const now = new Date();
     const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
     const url = tab === 'Today'
-      ? `https://cafe-backend-ay2n.onrender.com/api/orders?dateFrom=${todayStart.toISOString()}&dateTo=${now.toISOString()}`
+      ? `${process.env.REACT_APP_API_URL}/api/orders?dateFrom=${todayStart.toISOString()}&dateTo=${now.toISOString()}`
       : tab === 'Past Orders'
-      ? `https://cafe-backend-ay2n.onrender.com/api/orders?dateTo=${todayStart.toISOString()}`
-      : `https://cafe-backend-ay2n.onrender.com/api/orders?status=${tab.toLowerCase()}`;
+      ? `${process.env.REACT_APP_API_URL}/api/orders?dateTo=${todayStart.toISOString()}`
+      : `${process.env.REACT_APP_API_URL}/api/orders?status=${tab.toLowerCase()}`;
     axios.get(url)
       .then(res => {
         console.log('Orders fetched:', res.data);
         const newOrders = res.data;
-        // Sort orders by createdAt descending (newest first)
         const sortedOrders = newOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         if (orders.length > 0) {
           const currentIds = new Set(orders.map(o => o._id));
@@ -69,7 +68,7 @@ function OperatorDashboard() {
   };
 
   const fetchMenuItems = () => {
-    axios.get('https://cafe-backend-ay2n.onrender.com/api/menu')
+    axios.get(`${process.env.REACT_APP_API_URL}/api/menu`)
       .then(res => {
         console.log('Menu items fetched:', res.data);
         setMenuItems(res.data);
@@ -81,7 +80,7 @@ function OperatorDashboard() {
   };
 
   const fetchAnalytics = () => {
-    axios.get('https://cafe-backend-ay2n.onrender.com/api/orders/analytics')
+    axios.get(`${process.env.REACT_APP_API_URL}/api/orders/analytics`)
       .then(res => {
         console.log('Analytics fetched:', res.data);
         setAnalytics(res.data);
@@ -104,7 +103,7 @@ function OperatorDashboard() {
   }, [activeTab]);
 
   const handleStatusUpdate = (orderId, status) => {
-    axios.put(`https://cafe-backend-ay2n.onrender.com/api/orders/${orderId}`, { status })
+    axios.put(`${process.env.REACT_APP_API_URL}/api/orders/${orderId}`, { status })
       .then(() => {
         fetchOrders(activeTab === 'Today' ? 'Today' : activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
       })
@@ -130,7 +129,7 @@ function OperatorDashboard() {
   };
 
   const handleSaveEdit = () => {
-    axios.put(`https://cafe-backend-ay2n.onrender.com/api/orders/${editingOrder._id}`, {
+    axios.put(`${process.env.REACT_APP_API_URL}/api/orders/${editingOrder._id}`, {
       tableNumber: editingOrder.tableNumber,
       items: editingOrder.items.map(item => ({
         itemId: item.itemId,
@@ -150,7 +149,7 @@ function OperatorDashboard() {
 
   const handleCancelOrder = (orderId) => {
     if (window.confirm('Cancel this order?')) {
-      axios.delete(`https://cafe-backend-ay2n.onrender.com/api/orders/${orderId}`)
+      axios.delete(`${process.env.REACT_APP_API_URL}/api/orders/${orderId}`)
         .then(() => {
           fetchOrders(activeTab === 'Today' ? 'Today' : activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
         })
@@ -173,7 +172,7 @@ function OperatorDashboard() {
       formData.append('image', newItem.image);
     }
 
-    axios.post('https://cafe-backend-ay2n.onrender.com/api/menu', formData, {
+    axios.post(`${process.env.REACT_APP_API_URL}/api/menu`, formData, {
       headers: { 'Content-Type': 'multipart/form-data' },
     })
       .then(() => {
@@ -196,7 +195,7 @@ function OperatorDashboard() {
 
   const handleDeleteMenuItem = (itemId) => {
     if (window.confirm('Delete this menu item?')) {
-      axios.delete(`https://cafe-backend-ay2n.onrender.com/api/menu/${itemId}`)
+      axios.delete(`${process.env.REACT_APP_API_URL}/api/menu/${itemId}`)
         .then(() => {
           fetchMenuItems();
           setError(null);
@@ -209,7 +208,7 @@ function OperatorDashboard() {
   };
 
   const handleToggleAvailability = (itemId, isAvailable) => {
-    axios.put(`https://cafe-backend-ay2n.onrender.com/api/menu/${itemId}`, { isAvailable: !isAvailable })
+    axios.put(`${process.env.REACT_APP_API_URL}/api/menu/${itemId}`, { isAvailable: !isAvailable })
       .then(() => {
         fetchMenuItems();
         setError(null);
@@ -224,7 +223,6 @@ function OperatorDashboard() {
     activeTab === 'Past Orders' || activeTab === 'Today' ? true : order.status === activeTab
   );
 
-  // Pie chart colors
   const COLORS = ['#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#8b5cf6'];
 
   return (
@@ -529,7 +527,7 @@ function OperatorDashboard() {
                   <div className="flex items-center mb-2 sm:mb-0">
                     {item.image ? (
                       <img
-                        src={`https://cafe-backend-ay2n.onrender.com${item.image}`}
+                        src={`${process.env.REACT_APP_API_URL}${item.image}`}
                         alt={item.name}
                         className="w-16 h-16 object-cover rounded-lg mr-4"
                       />
