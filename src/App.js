@@ -9,6 +9,7 @@ function App() {
     <Router>
       <Routes>
         <Route path="/" element={<Menu />} />
+        <Route path="/order" element={<Menu />} />
         <Route path="/operator" element={<OperatorDashboard />} />
         <Route path="/payment" element={<PaymentDashboard />} />
       </Routes>

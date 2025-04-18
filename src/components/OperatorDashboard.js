@@ -214,15 +214,16 @@ function OperatorDashboard() {
     }
   };
 
-  const handleToggleAvailability = (itemId, isAvailable) => {
-    axios.put(`${process.env.REACT_APP_API_URL}/api/menu/${itemId}`, { isAvailable: !isAvailable })
-      .then(() => {
-        fetchMenuItems();
+  const handleToggleAvailability = (itemId, currentAvailability) => {
+    axios.put(`${process.env.REACT_APP_API_URL}/api/menu/${itemId}`, { isAvailable: !currentAvailability })
+      .then((response) => {
+        console.log('Availability toggled:', response.data);
+        fetchMenuItems(); // Refresh menu items to reflect the change
         setError(null);
       })
       .catch(err => {
-        console.error('Error updating availability:', err);
-        setError('Failed to update availability.');
+        console.error('Error toggling availability:', err);
+        setError('Failed to toggle availability. Please try again.');
       });
   };
 
@@ -283,22 +284,26 @@ function OperatorDashboard() {
       setError('Please select a table number and add items to the order.');
       return;
     }
-    axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, {
+    const payload = {
       tableNumber: parseInt(manualOrder.tableNumber),
       items: manualOrder.items.map(item => ({
         itemId: item.itemId,
         quantity: item.quantity
       }))
-    })
-      .then(() => {
+    };
+    console.log('Placing manual order:', payload);
+    axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, payload)
+      .then((response) => {
+        console.log('Manual order placed:', response.data);
         setManualOrder({ tableNumber: '', items: [], searchQuery: '' });
         setFilteredMenuItems(menuItems);
         fetchOrders('Today');
+        setError(null);
         alert('Manual order placed successfully.');
       })
       .catch(err => {
-        console.error('Error placing manual order:', err);
-        setError('Failed to place manual order.');
+        console.error('Error placing manual order:', err.response?.data || err.message);
+        setError(`Failed to place manual order: ${err.response?.data?.error || err.message}`);
       });
   };
 
