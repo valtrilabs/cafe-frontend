@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { FaPrint, FaCheck, FaUtensils, FaClock, FaChartLine, FaFileExport, FaTable, FaRupeeSign } from 'react-icons/fa';
+import { FaPrint, FaCheck, FaUtensils, FaClock, FaChartLine, FaFileExport, FaTable, FaRupeeSign, FaTimes } from 'react-icons/fa';
 
 function PaymentDashboard() {
   const [orders, setOrders] = useState([]);

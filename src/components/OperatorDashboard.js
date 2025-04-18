@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { FaPlus, FaEdit, FaTrash, FaCheck, FaTimes, FaChartBar, FaUtensils, FaList, FaClock, FaHamburger, FaArrowUp, FaArrowDown, FaRupeeSign, FaBell } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaCheck, FaTimes, FaChartBar, FaUtensils, FaList, FaClock, FaHamburger, FaArrowUp, FaArrowDown, FaRupeeSign, FaBell, FaShoppingCart } from 'react-icons/fa';
 
 function OperatorDashboard() {
   const [orders, setOrders] = useState([]);
