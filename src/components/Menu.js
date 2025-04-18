@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useLocation } from 'react-router-dom';
-import { FaShoppingCart, FaUtensils, FaRupeeSign } from 'react-icons/fa';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { FaShoppingCart, FaUtensils, FaRupeeSign, FaHistory } from 'react-icons/fa';
 
 function Menu() {
   const [menuItems, setMenuItems] = useState([]);
@@ -10,9 +10,46 @@ function Menu() {
   const [isMiniCartOpen, setIsMiniCartOpen] = useState(false);
   const [error, setError] = useState(null);
   const [addedItemId, setAddedItemId] = useState(null);
+  const [orderSummary, setOrderSummary] = useState(null); // For Feature 2
+  const [showOrderSummary, setShowOrderSummary] = useState(false); // For Feature 2
+  const [isSessionValid, setIsSessionValid] = useState(false); // For session validation
 
   const location = useLocation();
+  const navigate = useNavigate();
   const tableNumber = new URLSearchParams(location.search).get('table') || 'Unknown';
+
+  // Session validation logic
+  useEffect(() => {
+    const checkSession = () => {
+      const session = JSON.parse(localStorage.getItem(`table_${tableNumber}_session`));
+      if (session && session.expiresAt > Date.now()) {
+        setIsSessionValid(true);
+      } else {
+        setIsSessionValid(false);
+        localStorage.removeItem(`table_${tableNumber}_session`);
+      }
+    };
+
+    // Initialize session on first load
+    const initializeSession = () => {
+      const session = {
+        tableNumber,
+        expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes from now
+      };
+      localStorage.setItem(`table_${tableNumber}_session`, JSON.stringify(session));
+      setIsSessionValid(true);
+    };
+
+    if (!localStorage.getItem(`table_${tableNumber}_session`)) {
+      initializeSession();
+    } else {
+      checkSession();
+    }
+
+    // Check session validity every 30 seconds
+    const interval = setInterval(checkSession, 30000);
+    return () => clearInterval(interval);
+  }, [tableNumber]);
 
   const fetchMenu = () => {
     axios.get(`${process.env.REACT_APP_API_URL}/api/menu`)
@@ -28,8 +65,10 @@ function Menu() {
   };
 
   useEffect(() => {
-    fetchMenu();
-  }, []);
+    if (isSessionValid) {
+      fetchMenu();
+    }
+  }, [isSessionValid]);
 
   const categories = [
     { name: 'All', icon: '🌟' },
@@ -108,10 +147,18 @@ function Menu() {
       items: cart.map(item => ({ itemId: item.itemId, quantity: item.quantity }))
     })
       .then(res => {
+        setOrderSummary({
+          orderNumber: res.data.orderNumber,
+          items: [...cart],
+          total: cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
+          createdAt: new Date()
+        });
         alert('Congratulations, Your Order is placed successfully. Please wait 10-15 minutes until we prepare fresh food, just for you.');
         setCart([]);
         setIsMiniCartOpen(false);
-        return res.data.orderNumber;
+        // Invalidate session after order
+        localStorage.removeItem(`table_${tableNumber}_session`);
+        setIsSessionValid(false);
       })
       .catch(err => {
         console.error('Error placing order:', err);
@@ -121,6 +168,44 @@ function Menu() {
 
   const totalPrice = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+  // Feature 2: Show Order Summary
+  const toggleOrderSummary = () => {
+    setShowOrderSummary(!showOrderSummary);
+  };
+
+  // Feature 3: Call Staff
+  const callStaff = () => {
+    axios.post(`${process.env.REACT_APP_API_URL}/api/staff-calls`, {
+      tableNumber: parseInt(tableNumber),
+      timestamp: new Date()
+    })
+      .then(() => {
+        alert('Staff has been notified. They will assist you shortly.');
+      })
+      .catch(err => {
+        console.error('Error calling staff:', err);
+        setError('Failed to call staff. Please try again.');
+      });
+  };
+
+  if (!isSessionValid) {
+    return (
+      <div className="min-h-screen bg-orange-50 flex items-center justify-center">
+        <div className="text-center p-6 bg-white rounded-lg shadow-md">
+          <h1 className="text-2xl font-bold text-red-600 mb-4">Session Expired</h1>
+          <p className="text-gray-600 mb-4">Please scan the QR code again to access the menu.</p>
+          <button
+            className="px-4 py-2 rounded-lg text-white"
+            style={{ backgroundColor: '#b45309' }}
+            onClick={() => navigate(`/order?table=${tableNumber}`)}
+          >
+            Refresh
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-orange-50 pb-32">
@@ -134,6 +219,13 @@ function Menu() {
             <FaUtensils className="mr-2" style={{ color: '#fcd34d' }} /> GSaheb Cafe Menu - Table {tableNumber}
           </h1>
           <div className="flex items-center space-x-2 sm:space-x-4">
+            <button
+              className="text-xs sm:text-sm font-medium flex items-center px-2 py-1 rounded-full"
+              style={{ backgroundColor: '#b45309', color: '#ffffff' }}
+              onClick={toggleOrderSummary}
+            >
+              <FaHistory className="mr-1 sm:mr-2" style={{ color: '#fcd34d' }} /> Show Order Summary
+            </button>
             <span 
               className="text-xs sm:text-sm font-medium flex items-center px-2 py-1 rounded-full" 
               style={{ backgroundColor: '#b45309', color: '#ffffff' }}
@@ -143,6 +235,47 @@ function Menu() {
           </div>
         </div>
       </header>
+
+      {/* Order Summary Modal */}
+      {showOrderSummary && orderSummary && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4 flex items-center">
+              <FaHistory className="mr-2" style={{ color: '#b45309' }} /> Your Order Summary
+            </h2>
+            <p className="text-gray-600 text-sm mb-2">Order #{orderSummary.orderNumber}</p>
+            <p className="text-gray-600 text-sm mb-4">Placed: {new Date(orderSummary.createdAt).toLocaleString()}</p>
+            <ul className="space-y-2 mb-4">
+              {orderSummary.items.map((item, index) => (
+                <li key={index} className="text-gray-600 text-sm">
+                  {item.quantity} x {item.name} (<FaRupeeSign className="inline mr-1" />{(item.quantity * item.price).toFixed(2)})
+                </li>
+              ))}
+            </ul>
+            <p className="font-bold text-gray-800 flex items-center">
+              Total: <FaRupeeSign className="ml-1 mr-1" />{orderSummary.total.toFixed(2)}
+            </p>
+            <button
+              className="w-full mt-4 px-4 py-2 rounded-lg text-white"
+              style={{ backgroundColor: '#b45309' }}
+              onClick={toggleOrderSummary}
+            >
+              Close
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Call Staff Button */}
+      <div className="container mx-auto p-2 sm:p-4">
+        <button
+          className="w-full sm:w-auto px-4 py-2 rounded-lg text-white flex items-center justify-center mb-4"
+          style={{ backgroundColor: '#dc2626' }}
+          onClick={callStaff}
+        >
+          <FaUtensils className="mr-2" /> Call Staff
+        </button>
+      </div>
 
       {/* Error Message */}
       {error && (

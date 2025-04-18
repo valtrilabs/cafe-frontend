@@ -14,12 +14,43 @@ function PaymentDashboard() {
     year: 0
   });
   const [activeTable, setActiveTable] = useState('All');
+  const [isAuthenticated, setIsAuthenticated] = useState(false); // For Feature 6
+  const [password, setPassword] = useState(''); // For Feature 6
+  const [customDateRange, setCustomDateRange] = useState({ startDate: '', endDate: '' });
 
-  const fetchOrders = () => {
-    axios.get('https://cafe-backend-ay2n.onrender.com/api/orders')
+  // Feature 6: Password Protection
+  useEffect(() => {
+    const storedAuth = localStorage.getItem('paymentAuth');
+    if (storedAuth) {
+      setIsAuthenticated(true);
+    }
+  }, []);
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    if (password === 'admin123') { // Replace with a secure password in production
+      setIsAuthenticated(true);
+      localStorage.setItem('paymentAuth', 'true');
+      setError(null);
+    } else {
+      setError('Incorrect password');
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem('paymentAuth');
+    setPassword('');
+  };
+
+  const fetchOrders = (startDate = null, endDate = null) => {
+    let url = `${process.env.REACT_APP_API_URL}/api/orders`;
+    if (startDate && endDate) {
+      url += `?dateFrom=${startDate.toISOString()}&dateTo=${endDate.toISOString()}`;
+    }
+    axios.get(url)
       .then(res => {
         console.log('Orders fetched:', res.data);
-        // Sort orders by createdAt descending (newest first)
         const sortedOrders = res.data.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
         setOrders(sortedOrders);
         calculateRevenue(sortedOrders);
@@ -33,12 +64,10 @@ function PaymentDashboard() {
 
   const calculateRevenue = (orders) => {
     const now = new Date();
-    const todayStart = new Date(now.setHours(0, 0, 0, 0));
-    const weekStart = new Date(now);
-    weekStart.setDate(now.getDate() - now.getDay());
-    weekStart.setHours(0, 0, 0, 0);
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    const yearStart = new Date(now.getFullYear(), 0, 1);
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
+    const weekStart = new Date(now.getFullYear(), now.getMonth(), now.getDate() - now.getDay(), 0, 0, 0);
+    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1, 0, 0, 0);
+    const yearStart = new Date(now.getFullYear(), 0, 1, 0, 0, 0);
 
     const revenue = {
       today: 0,
@@ -48,306 +77,361 @@ function PaymentDashboard() {
     };
 
     orders.forEach(order => {
-      if (order.status === 'Completed') {
-        const total = order.items.reduce((sum, item) => sum + (item.quantity * (item.itemId ? item.itemId.price : 0)), 0);
-        const orderDate = new Date(order.createdAt);
-        if (orderDate >= todayStart) revenue.today += total;
-        if (orderDate >= weekStart) revenue.week += total;
-        if (orderDate >= monthStart) revenue.month += total;
-        if (orderDate >= yearStart) revenue.year += total;
-      }
+      const orderDate = new Date(order.createdAt);
+      let total = 0;
+      order.items.forEach(item => {
+        if (item.itemId) {
+          total += item.quantity * item.itemId.price;
+        }
+      });
+
+      if (orderDate >= todayStart) revenue.today += total;
+      if (orderDate >= weekStart) revenue.week += total;
+      if (orderDate >= monthStart) revenue.month += total;
+      if (orderDate >= yearStart) revenue.year += total;
     });
 
     setRevenueData(revenue);
   };
 
-  const exportRevenueCSV = () => {
+  useEffect(() => {
+    if (isAuthenticated) {
+      fetchOrders();
+      const interval = setInterval(() => {
+        fetchOrders();
+        setCurrentTime(new Date());
+      }, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [isAuthenticated]);
+
+  const handlePaymentConfirm = (orderId) => {
+    axios.put(`${process.env.REACT_APP_API_URL}/api/orders/${orderId}`, { status: 'Completed' })
+      .then(() => {
+        fetchOrders();
+        setError(null);
+      })
+      .catch(err => {
+        console.error('Error confirming payment:', err);
+        setError('Failed to confirm payment.');
+      });
+  };
+
+  const handlePrintBill = (order) => {
+    const billContent = `
+      GSaheb Cafe Bill
+      --------------------
+      Order #${order.orderNumber}
+      Table: ${order.tableNumber}
+      Date: ${new Date(order.createdAt).toLocaleString()}
+      --------------------
+      Items:
+      ${order.items.map(item => 
+        `${item.quantity} x ${item.itemId ? item.itemId.name : '[Deleted Item]'} - ₹${(item.quantity * (item.itemId ? item.itemId.price : 0)).toFixed(2)}`
+      ).join('\n')}
+      --------------------
+      Total: ₹${order.items.reduce((sum, item) => sum + (item.quantity * (item.itemId ? item.itemId.price : 0)), 0).toFixed(2)}
+      --------------------
+      Thank you for dining with us!
+    `;
+    const printWindow = window.open('', '_blank');
+    printWindow.document.write(`<pre>${billContent}</pre>`);
+    printWindow.document.close();
+    printWindow.print();
+  };
+
+  const handleExportCSV = () => {
     const csvContent = [
-      ['Period', 'Revenue (₹)'],
-      ['Today', revenueData.today.toFixed(2)],
-      ['This Week', revenueData.week.toFixed(2)],
-      ['This Month', revenueData.month.toFixed(2)],
-      ['This Year', revenueData.year.toFixed(2)]
-    ]
-      .map(row => row.join(','))
-      .join('\n');
+      ['Order #', 'Table', 'Date', 'Items', 'Total', 'Status'],
+      ...orders.map(order => [
+        order.orderNumber,
+        order.tableNumber,
+        new Date(order.createdAt).toLocaleString(),
+        order.items.map(item => `${item.quantity} x ${item.itemId ? item.itemId.name : '[Deleted Item]'}`).join('; '),
+        order.items.reduce((sum, item) => sum + (item.quantity * (item.itemId ? item.itemId.price : 0)), 0).toFixed(2),
+        order.status
+      ])
+    ].map(row => row.join(',')).join('\n');
+
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `GSahebCafe_Revenue_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `orders_${new Date().toISOString().split('T')[0]}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
 
-  useEffect(() => {
-    fetchOrders();
-    const interval = setInterval(fetchOrders, 30000);
-    const timeInterval = setInterval(() => setCurrentTime(new Date()), 1000);
-    return () => {
-      clearInterval(interval);
-      clearInterval(timeInterval);
-    };
-  }, []);
-
-  const handleMarkPaid = (orderId) => {
-    axios.put(`https://cafe-backend-ay2n.onrender.com/api/orders/${orderId}`, { status: 'Completed' })
-      .then(() => {
-        fetchOrders();
-      })
-      .catch(err => {
-        console.error('Error marking paid:', err);
-        setError('Failed to mark as paid.');
-      });
+  const handleCustomDateRange = () => {
+    if (customDateRange.startDate && customDateRange.endDate) {
+      const start = new Date(customDateRange.startDate);
+      const end = new Date(customDateRange.endDate);
+      end.setHours(23, 59, 59, 999);
+      if (start <= end) {
+        fetchOrders(start, end);
+        setError(null);
+      } else {
+        setError('End date must be after start date.');
+      }
+    } else {
+      setError('Please select both start and end dates.');
+    }
   };
 
-  const handlePrintReceipt = (order) => {
-    const receiptWindow = window.open('', '_blank');
-    receiptWindow.document.write(`
-      <html>
-        <head>
-          <title>Receipt - GSaheb Cafe</title>
-          <style>
-            body { font-family: Arial, sans-serif; padding: 20px; }
-            h1 { text-align: center; }
-            .subtitle { text-align: center; font-style: italic; color: #555; }
-            table { width: 100%; border-collapse: collapse; margin: 20px 0; }
-            th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
-            th { background-color: #f2f2f2; }
-            .total { font-weight: bold; }
-            .footer { text-align: center; margin-top: 20px; }
-            .custom-field { color: #777; }
-          </style>
-        </head>
-        <body>
-          <h1>GSaheb Cafe</h1>
-          <p class="subtitle">[Your Cafe Tagline]</p>
-          <p style="text-align: center;">Table ${order.tableNumber} | Order #${order.orderNumber}</p>
-          <table>
-            <tr>
-              <th>Item</th>
-              <th>Quantity</th>
-              <th>Price</th>
-              <th>Total</th>
-            </tr>
-            ${order.items
-              .map(
-                item => `
-                  <tr>
-                    <td>${item.itemId ? item.itemId.name : '[Deleted Item]'}</td>
-                    <td>${item.quantity}</td>
-                    <td>₹${item.itemId ? item.itemId.price.toFixed(2) : '0.00'}</td>
-                    <td>₹${item.itemId ? (item.quantity * item.itemId.price).toFixed(2) : '0.00'}</td>
-                  </tr>
-                `
-              )
-              .join('')}
-            <tr>
-              <td colspan="3" class="total">Total</td>
-              <td class="total">₹${order.items
-                .reduce((sum, item) => sum + (item.itemId ? item.quantity * item.itemId.price : 0), 0)
-                .toFixed(2)}</td>
-            </tr>
-          </table>
-          <p>Date: ${new Date(order.createdAt).toLocaleString()}</p>
-          <p>Status: ${order.status}</p>
-          <p class="custom-field">[Custom Field 1: e.g., GSTIN]</p>
-          <p class="custom-field">[Custom Field 2: e.g., Contact Info]</p>
-          <div class="footer">
-            <p>Thank you for dining at GSaheb Cafe!</p>
-            <p>[Footer Note]</p>
-          </div>
-        </body>
-      </html>
-    `);
-    receiptWindow.document.close();
-    receiptWindow.print();
-  };
-
-  // Chart data for weekly revenue
-  const chartData = Array.from({ length: 7 }, (_, i) => {
-    const date = new Date();
-    date.setDate(date.getDate() - i);
-    const dayOrders = orders.filter(o => {
-      const orderDate = new Date(o.createdAt);
-      return (
-        orderDate.getDate() === date.getDate() &&
-        orderDate.getMonth() === date.getMonth() &&
-        orderDate.getFullYear() === date.getFullYear() &&
-        o.status === 'Completed'
-      );
-    });
-    const revenue = dayOrders.reduce(
-      (sum, o) => sum + o.items.reduce((s, i) => s + (i.itemId ? i.quantity * i.itemId.price : 0), 0),
-      0
-    );
-    return {
-      name: date.toLocaleDateString('en-US', { weekday: 'short' }),
-      revenue
-    };
-  }).reverse();
-
-  // Unique table numbers plus Paid Bills
-  const tableNumbers = ['All', 'Paid Bills', ...Array.from(new Set(orders.map(order => order.tableNumber.toString()))).sort((a, b) => a - b)];
-
-  // Filter orders by active table
   const filteredOrders = activeTable === 'All'
-    ? orders.filter(order => order.status !== 'Completed')
-    : activeTable === 'Paid Bills'
-    ? orders.filter(order => order.status === 'Completed')
-    : orders.filter(order => order.tableNumber.toString() === activeTable && order.status !== 'Completed');
+    ? orders
+    : orders.filter(order => order.tableNumber.toString() === activeTable);
+
+  const chartData = [];
+  const today = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const date = new Date(today.getFullYear(), today.getMonth(), today.getDate() - i);
+    const dayOrders = orders.filter(order => {
+      const orderDate = new Date(order.createdAt);
+      return orderDate.toDateString() === date.toDateString();
+    });
+    const total = dayOrders.reduce((sum, order) => 
+      sum + order.items.reduce((s, item) => s + (item.quantity * (item.itemId ? item.itemId.price : 0)), 0), 0
+    );
+    chartData.push({
+      name: date.toLocaleDateString('en-US', { weekday: 'short' }),
+      revenue: total
+    });
+  }
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-orange-50 flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-md p-6 w-full max-w-sm">
+          <h1 className="text-2xl font-bold mb-4 text-center">Payment Dashboard Login</h1>
+          <form onSubmit={handleLogin}>
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-medium mb-2">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500"
+                required
+              />
+            </div>
+            {error && <p className="text-red-600 Gazzetta, serif text-sm mb-4">{error}</p>}
+            <button
+              type="submit"
+              className="w-full px-4 py-2 rounded-lg text-white"
+              style={{ backgroundColor: '#b45309' }}
+            >
+              Login
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-orange-50 p-4 sm:p-6">
-      <h1 className="text-2xl sm:text-3xl font-bold text-center mb-4 flex items-center justify-center">
-        <FaRupeeSign className="mr-2" style={{ color: '#b45309' }} /> Payment Dashboard - GSaheb Cafe
-      </h1>
-      <p className="text-center text-gray-600 mb-6 flex items-center justify-center text-sm sm:text-base">
-        <FaClock className="mr-2" /> Current Time: {currentTime.toLocaleString()}
-      </p>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl sm:text-3xl font-bold flex items-center">
+          <FaUtensils className="mr-2" style={{ color: '#b45309' }} /> Payment Dashboard - GSaheb Cafe
+        </h1>
+        <button
+          className="px-4 py-2 rounded-lg text-white"
+          style={{ backgroundColor: '#dc2626' }}
+          onClick={handleLogout}
+        >
+          Logout
+        </button>
+      </div>
 
       {error && (
         <p className="text-center text-red-600 mb-4">{error}</p>
       )}
 
-      {/* Table Tabs */}
-      <div className="flex flex-wrap justify-center gap-2 sm:gap-4 mb-6">
-        {tableNumbers.map(table => (
+      <div className="mb-6 flex flex-col sm:flex-row justify-between items-center gap-4">
+        <div className="flex items-center gap-2">
+          <FaClock className="text-gray-600" />
+          <span className="text-gray-600">{currentTime.toLocaleString()}</span>
+        </div>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            type="date"
+            value={customDateRange.startDate}
+            onChange={e => setCustomDateRange({ ...customDateRange, startDate: e.target.value })}
+            className="border rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500"
+          />
+          <input
+            type="date"
+            value={customDateRange.endDate}
+            onChange={e => setCustomDateRange({ ...customDateRange, endDate: e.target.value })}
+            className="border rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500"
+          />
           <button
-            key={table}
-            className="flex items-center px-3 py-2 rounded-lg text-sm sm:text-base font-medium transition-colors"
-            style={{
-              backgroundColor: activeTable === table ? '#b45309' : '#fed7aa',
-              color: activeTable === table ? '#ffffff' : '#1f2937',
-              boxShadow: activeTable === table ? '0 4px 6px rgba(0, 0, 0, 0.1)' : 'none'
-            }}
-            onClick={() => setActiveTable(table)}
+            className="px-4 py-2 rounded-lg text-white flex items-center"
+            style={{ backgroundColor: '#b45309' }}
+            onClick={handleCustomDateRange}
           >
-            <FaTable className="mr-2" /> {table === 'Paid Bills' ? 'Paid Bills' : `Table ${table}`}
+            <FaChartLine className="mr-2" /> Filter
           </button>
+          <button
+            className="px-4 py-2 rounded-lg text-white flex items-center"
+            style={{ backgroundColor: '#4b5563' }}
+            onClick={() => {
+              setCustomDateRange({ startDate: '', endDate: '' });
+              fetchOrders();
+            }}
+          >
+            <FaTimes className="mr-2" /> Clear Filter
+          </button>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+        {[
+          { label: 'Today', value: revenueData.today },
+          { label: 'This Week', value: revenueData.week },
+          { label: 'This Month', value: revenueData.month },
+          { label: 'This Year', value: revenueData.year }
+        ].map((metric, index) => (
+          <div
+            key={index}
+            className="bg-white rounded-lg shadow-md p-4 flex items-center"
+            style={{ backgroundColor: '#fef3c7' }}
+          >
+            <FaRupeeSign className="text-amber-600 text-2xl mr-3" />
+            <div>
+              <p className="text-gray-600 text-sm">{metric.label}</p>
+              <p className="text-xl font-bold flex items-center">
+                <FaRupeeSign className="mr-1" />{metric.value.toFixed(2)}
+              </p>
+            </div>
+          </div>
         ))}
       </div>
 
-      {/* Orders Grid */}
-      <h2 className="text-xl sm:text-2xl font-semibold mb-4 flex items-center">
-        <FaUtensils className="mr-2" style={{ color: '#b45309' }} /> Orders
-      </h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 mb-6">
-        {filteredOrders.length === 0 ? (
-          <p className="text-center col-span-full text-gray-600">No orders for {activeTable === 'Paid Bills' ? 'Paid Bills' : `Table ${activeTable}`}.</p>
-        ) : (
-          filteredOrders.map(order => (
-            <div
-              key={order._id}
-              className="bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow"
-            >
-              <h3 className="text-lg font-semibold flex items-center">
-                <FaTable className="mr-2" style={{ color: '#b45309' }} /> Table {order.tableNumber} (Order #{order.orderNumber})
-              </h3>
-              <p className="text-gray-600 text-sm flex items-center">
-                <FaClock className="mr-2" /> Placed: {new Date(order.createdAt).toLocaleString()}
-              </p>
-              <ul className="mt-2 space-y-1">
-                {order.items.map((item, index) => (
-                  <li key={index} className="text-gray-600 text-sm">
-                    {item.quantity} x {item.itemId ? item.itemId.name : '[Deleted Item]'} (<FaRupeeSign className="inline mr-1" />
-                    {(item.quantity * (item.itemId ? item.itemId.price : 0)).toFixed(2)})
-                  </li>
-                ))}
-              </ul>
-              <p className="font-bold mt-2 flex items-center text-sm sm:text-base">
-                <FaRupeeSign className="mr-2" /> Total: 
-                {order.items
-                  .reduce((sum, item) => sum + (item.itemId ? item.quantity * item.itemId.price : 0), 0)
-                  .toFixed(2)}
-              </p>
-              <p
-                className={`mt-2 text-sm ${
-                  order.status === 'Pending'
-                    ? 'text-red-600'
-                    : order.status === 'Prepared'
-                    ? 'text-green-600'
-                    : 'text-blue-600'
-                }`}
-              >
-                Status: {order.status}
-              </p>
-              <div className="mt-4 grid grid-cols-2 gap-2">
-                {order.status !== 'Completed' && (
-                  <button
-                    className="w-full px-3 py-2 rounded-lg text-white flex items-center justify-center text-sm"
-                    style={{ backgroundColor: '#16a34a' }}
-                    onClick={() => handleMarkPaid(order._id)}
-                  >
-                    <FaCheck className="mr-2" /> Mark as Paid
-                  </button>
-                )}
-                <button
-                  className="w-full px-3 py-2 rounded-lg text-white flex items-center justify-center text-sm"
-                  style={{ backgroundColor: '#2563eb' }}
-                  onClick={() => handlePrintReceipt(order)}
-                >
-                  <FaPrint className="mr-2" /> Print Receipt
-                </button>
-              </div>
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Revenue Summary */}
-      <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 mb-6">
+      <div className="mb-6">
         <h2 className="text-xl sm:text-2xl font-semibold mb-4 flex items-center">
-          <FaRupeeSign className="mr-2" style={{ color: '#b45309' }} /> Revenue Overview
+          <FaTable className="mr-2" style={{ color: '#b45309' }} /> Filter by Table
         </h2>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          {[
-            { label: 'Today', value: revenueData.today, color: '#fef3c7', iconColor: '#2563eb' },
-            { label: 'This Week', value: revenueData.week, color: '#ffedd5', iconColor: '#16a34a' },
-            { label: 'This Month', value: revenueData.month, color: '#fee2e2', iconColor: '#d97706' },
-            { label: 'This Year', value: revenueData.year, color: '#e9d5ff', iconColor: '#7c3aed' }
-          ].map((metric, index) => (
-            <div
-              key={index}
-              className="p-4 rounded-lg shadow-sm transition-colors flex items-center"
-              style={{ backgroundColor: metric.color }}
+        <div className="flex flex-wrap gap-2">
+          <button
+            className="px-3 py-2 rounded-lg text-sm font-medium"
+            style={{
+              backgroundColor: activeTable === 'All' ? '#b45309' : '#fed7aa',
+              color: activeTable === 'All' ? '#ffffff' : '#1f2937'
+            }}
+            onClick={() => setActiveTable('All')}
+          >
+            All Tables
+          </button>
+          {[...new Set(orders.map(order => order.tableNumber))].sort((a, b) => a - b).map(table => (
+            <button
+              key={table}
+              className="px-3 py-2 rounded-lg text-sm font-medium"
+              style={{
+                backgroundColor: activeTable === table.toString() ? '#b45309' : '#fed7aa',
+                color: activeTable === table.toString() ? '#ffffff' : '#1f2937'
+              }}
+              onClick={() => setActiveTable(table.toString())}
             >
-              <FaRupeeSign className="mr-3 text-xl" style={{ color: metric.iconColor }} />
-              <div>
-                <p className="text-gray-600 text-sm">{metric.label}</p>
-                <p className="text-xl sm:text-2xl font-bold flex items-center">
-                  <FaRupeeSign className="mr-1" />{metric.value.toFixed(2)}
-                </p>
-              </div>
-            </div>
+              Table {table}
+            </button>
           ))}
         </div>
-        <div className="mt-6 border-t-2 border-amber-200 pt-4">
-          <button
-            className="w-full sm:w-auto px-4 py-2 rounded-lg text-white flex items-center justify-center"
-            style={{ backgroundColor: '#b45309' }}
-            onClick={exportRevenueCSV}
-          >
-            <FaFileExport className="mr-2" /> Export Revenue as CSV
-          </button>
+      </div>
+
+      <div className="mb-6">
+        <h2 className="text-xl sm:text-2xl font-semibold mb-4 flex items-center">
+          <FaChartLine className="mr-2" style={{ color: '#b45309' }} /> Revenue Trend (Last 7 Days)
+        </h2>
+        <div className="bg-white rounded-lg shadow-md p-4" style={{ backgroundColor: '#fef3c7' }}>
+          <ResponsiveContainer width="100%" height={300}>
+            <LineChart data={chartData}>
+              <CartesianGrid strokeDasharray="3 3" />
+              <XAxis dataKey="name" />
+              <YAxis />
+              <Tooltip formatter={(value) => [<FaRupeeSign className="inline mr-1" />, value.toFixed(2)]} />
+              <Legend />
+              <Line type="monotone" dataKey="revenue" stroke="#f59e0b" strokeWidth={2} />
+            </LineChart>
+          </ResponsiveContainer>
         </div>
       </div>
 
-      {/* Revenue Chart */}
-      <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
-        <h2 className="text-xl sm:text-2xl font-semibold mb-4 flex items-center">
-          <FaChartLine className="mr-2" style={{ color: '#b45309' }} /> Weekly Revenue Trend
-        </h2>
-        <ResponsiveContainer width="100%" height={300}>
-          <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="name" />
-            <YAxis />
-            <Tooltip formatter={(value) => [<FaRupeeSign className="inline mr-1" />, value.toFixed(2)]} />
-            <Legend />
-            <Line type="monotone" dataKey="revenue" stroke="#f59e0b" activeDot={{ r: 8 }} />
-          </LineChart>
-        </ResponsiveContainer>
+      <div className="mb-6">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl sm:text-2xl font-semibold flex items-center">
+            <FaUtensils className="mr-2" style={{ color: '#b45309' }} /> Orders
+          </h2>
+          <button
+            className="px-4 py-2 rounded-lg text-white flex items-center"
+            style={{ backgroundColor: '#4b5563' }}
+            onClick={handleExportCSV}
+          >
+            <FaFileExport className="mr-2" /> Export CSV
+          </button>
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {filteredOrders.length === 0 ? (
+            <p className="text-center col-span-full text-gray-600">No orders found.</p>
+          ) : (
+            filteredOrders.map(order => (
+              <div
+                key={order._id}
+                className="bg-white rounded-lg shadow-md p-4"
+                style={{ backgroundColor: '#fef3c7' }}
+              >
+                <h3 className="text-lg font-semibold flex items-center">
+                  <FaUtensils className="mr-2" style={{ color: '#b45309' }} /> Table {order.tableNumber} (Order #{order.orderNumber})
+                </h3>
+                <p className="text-gray-600 text-sm flex items-center">
+                  <FaClock className="mr-2" /> Placed: {new Date(order.createdAt).toLocaleString()}
+                </p>
+                <ul className="mt-2 space-y-1">
+                  {order.items.map((item, index) => (
+                    <li key={index} className="text-gray-600 text-sm">
+                      {item.quantity} x {item.itemId ? item.itemId.name : '[Deleted Item]'} (<FaRupeeSign className="inline mr-1" />
+                      {(item.quantity * (item.itemId ? item.itemId.price : 0)).toFixed(2)})
+                    </li>
+                  ))}
+                </ul>
+                <p
+                  className={`mt-2 text-sm font-medium ${
+                    order.status === 'Pending'
+                      ? 'text-red-600'
+                      : order.status === 'Prepared'
+                      ? 'text-green-600'
+                      : 'text-blue-600'
+                  }`}
+                >
+                  Status: {order.status}
+                </p>
+                <p className="mt-2 text-sm font-bold flex items-center">
+                  Total: <FaRupeeSign className="ml-1 mr-1" />
+                  {order.items.reduce((sum, item) => sum + (item.quantity * (item.itemId ? item.itemId.price : 0)), 0).toFixed(2)}
+                </p>
+                <div className="mt-4 flex flex-col sm:flex-row gap-2">
+                  <button
+                    className="w-full sm:w-auto px-3 py-2 rounded-lg text-white flex items-center justify-center text-sm"
+                    style={{ backgroundColor: '#2563eb' }}
+                    onClick={() => handlePrintBill(order)}
+                  >
+                    <FaPrint className="mr-2" /> Print Bill
+                  </button>
+                  {order.status !== 'Completed' && (
+                    <button
+                      className="w-full sm:w-auto px-3 py-2 rounded-lg text-white flex items-center justify-center text-sm"
+                      style={{ backgroundColor: '#16a34a' }}
+                      onClick={() => handlePaymentConfirm(order._id)}
+                    >
+                      <FaCheck className="mr-2" /> Confirm Payment
+                    </button>
+                  )}
+                </div>
+              </div>
+            ))
+          )}
+        </div>
       </div>
     </div>
   );

@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { FaPlus, FaEdit, FaTrash, FaCheck, FaTimes, FaChartBar, FaUtensils, FaList, FaClock, FaHamburger, FaArrowUp, FaArrowDown, FaRupeeSign } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaCheck, FaTimes, FaChartBar, FaUtensils, FaList, FaClock, FaHamburger, FaArrowUp, FaArrowDown, FaRupeeSign, FaBell } from 'react-icons/fa';
 
 function OperatorDashboard() {
   const [orders, setOrders] = useState([]);
@@ -26,6 +26,34 @@ function OperatorDashboard() {
     peakHours: [],
     categories: []
   });
+  const [staffCalls, setStaffCalls] = useState([]); // For Feature 3
+  const [manualOrder, setManualOrder] = useState({ tableNumber: '', cart: [] }); // For Feature 5
+  const [isAuthenticated, setIsAuthenticated] = useState(false); // For Feature 4
+  const [password, setPassword] = useState(''); // For Feature 4
+
+  // Feature 4: Password Protection
+  useEffect(() => {
+    const storedAuth = localStorage.getItem('operatorAuth');
+    if (storedAuth) {
+      setIsAuthenticated(true);
+    }
+  }, []);
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    if (password === 'admin123') { // Replace with a secure password in production
+      setIsAuthenticated(true);
+      localStorage.setItem('operatorAuth', 'true');
+    } else {
+      setError('Incorrect password');
+    }
+  };
+
+  const handleLogout = () => {
+    setIsAuthenticated(false);
+    localStorage.removeItem('operatorAuth');
+    setPassword('');
+  };
 
   const fetchOrders = (tab) => {
     const now = new Date();
@@ -91,16 +119,33 @@ function OperatorDashboard() {
       });
   };
 
+  // Feature 3: Fetch Staff Calls
+  const fetchStaffCalls = () => {
+    axios.get(`${process.env.REACT_APP_API_URL}/api/staff-calls`)
+      .then(res => {
+        console.log('Staff calls fetched:', res.data);
+        setStaffCalls(res.data);
+      })
+      .catch(err => {
+        console.error('Error fetching staff calls:', err);
+        setError('Failed to load staff calls.');
+      });
+  };
+
   useEffect(() => {
-    fetchOrders('Today');
-    fetchMenuItems();
-    fetchAnalytics();
-    const interval = setInterval(() => {
-      fetchOrders(activeTab === 'Today' ? 'Today' : activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
-      if (activeTab === 'Analytics') fetchAnalytics();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [activeTab]);
+    if (isAuthenticated) {
+      fetchOrders('Today');
+      fetchMenuItems();
+      fetchAnalytics();
+      fetchStaffCalls();
+      const interval = setInterval(() => {
+        fetchOrders(activeTab === 'Today' ? 'Today' : activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
+        if (activeTab === 'Analytics') fetchAnalytics();
+        if (activeTab === 'Staff Calls') fetchStaffCalls();
+      }, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, isAuthenticated]);
 
   const handleStatusUpdate = (orderId, status) => {
     axios.put(`${process.env.REACT_APP_API_URL}/api/orders/${orderId}`, { status })
@@ -219,17 +264,134 @@ function OperatorDashboard() {
       });
   };
 
+  // Feature 3: Resolve Staff Call
+  const handleResolveStaffCall = (callId) => {
+    axios.put(`${process.env.REACT_APP_API_URL}/api/staff-calls/${callId}`)
+      .then(() => {
+        fetchStaffCalls();
+      })
+      .catch(err => {
+        console.error('Error resolving staff call:', err);
+        setError('Failed to resolve staff call.');
+      });
+  };
+
+  // Feature 5: Manual Order
+  const addToManualCart = (item) => {
+    const existingItem = manualOrder.cart.find(cartItem => cartItem.itemId === item._id);
+    if (existingItem) {
+      setManualOrder({
+        ...manualOrder,
+        cart: manualOrder.cart.map(cartItem =>
+          cartItem.itemId === item._id
+            ? { ...cartItem, quantity: cartItem.quantity + 1 }
+            : cartItem
+        )
+      });
+    } else {
+      setManualOrder({
+        ...manualOrder,
+        cart: [
+          ...manualOrder.cart,
+          {
+            itemId: item._id,
+            name: item.name,
+            price: item.price,
+            quantity: 1
+          }
+        ]
+      });
+    }
+  };
+
+  const updateManualQuantity = (itemId, delta) => {
+    setManualOrder({
+      ...manualOrder,
+      cart: manualOrder.cart.map(cartItem =>
+        cartItem.itemId === itemId
+          ? { ...cartItem, quantity: Math.max(1, cartItem.quantity + delta) }
+          : cartItem
+      )
+    });
+  };
+
+  const removeFromManualCart = (itemId) => {
+    setManualOrder({
+      ...manualOrder,
+      cart: manualOrder.cart.filter(cartItem => cartItem.itemId !== itemId)
+    });
+  };
+
+  const placeManualOrder = () => {
+    if (!manualOrder.tableNumber || manualOrder.cart.length === 0) {
+      setError('Please select a table number and add items to the cart.');
+      return;
+    }
+    axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, {
+      tableNumber: parseInt(manualOrder.tableNumber),
+      items: manualOrder.cart.map(item => ({ itemId: item.itemId, quantity: item.quantity }))
+    })
+      .then(() => {
+        alert('Manual order placed successfully.');
+        setManualOrder({ tableNumber: '', cart: [] });
+        fetchOrders(activeTab === 'Today' ? 'Today' : activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
+      })
+      .catch(err => {
+        console.error('Error placing manual order:', err);
+        setError('Failed to place manual order.');
+      });
+  };
+
   const filteredOrders = orders.filter(order => 
     activeTab === 'Past Orders' || activeTab === 'Today' ? true : order.status === activeTab
   );
 
   const COLORS = ['#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#8b5cf6'];
 
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-orange-50 flex items-center justify-center">
+        <div className="bg-white rounded-lg shadow-md p-6 w-full max-w-sm">
+          <h1 className="text-2xl font-bold mb-4 text-center">Operator Login</h1>
+          <form onSubmit={handleLogin}>
+            <div className="mb-4">
+              <label className="block text-gray-700 text-sm font-medium mb-2">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500"
+                required
+              />
+            </div>
+            {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
+            <button
+              type="submit"
+              className="w-full px-4 py-2 rounded-lg text-white"
+              style={{ backgroundColor: '#b45309' }}
+            >
+              Login
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-orange-50 p-4 sm:p-6">
-      <h1 className="text-2xl sm:text-3xl font-bold text-center mb-6 flex items-center justify-center">
-        <FaUtensils className="mr-2" style={{ color: '#b45309' }} /> Operator Dashboard - GSaheb Cafe
-      </h1>
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-2xl sm:text-3xl font-bold flex items-center">
+          <FaUtensils className="mr-2" style={{ color: '#b45309' }} /> Operator Dashboard - GSaheb Cafe
+        </h1>
+        <button
+          className="px-4 py-2 rounded-lg text-white"
+          style={{ backgroundColor: '#dc2626' }}
+          onClick={handleLogout}
+        >
+          Logout
+        </button>
+      </div>
       
       {error && (
         <p className="text-center text-red-600 mb-4">{error}</p>
@@ -245,6 +407,8 @@ function OperatorDashboard() {
           { name: 'Past Orders', icon: <FaList /> },
           { name: 'Menu Management', icon: <FaHamburger /> },
           { name: 'Analytics', icon: <FaChartBar /> },
+          { name: 'Staff Calls', icon: <FaBell /> }, // Feature 3
+          { name: 'Create Manual Order', icon: <FaPlus /> }, // Feature 5
         ].map(tab => (
           <button
             key={tab.name}
@@ -261,6 +425,144 @@ function OperatorDashboard() {
           </button>
         ))}
       </div>
+
+      {/* Staff Calls Tab */}
+      {activeTab === 'Staff Calls' && (
+        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+          <h2 className="text-xl sm:text-2xl font-semibold mb-4 flex items-center">
+            <FaBell className="mr-2" style={{ color: '#b45309' }} /> Staff Call Requests
+          </h2>
+          {staffCalls.length === 0 ? (
+            <p className="text-gray-600">No pending staff calls.</p>
+          ) : (
+            <div className="space-y-4">
+              {staffCalls.map(call => (
+                <div
+                  key={call._id}
+                  className="flex items-center justify-between p-4 rounded-lg"
+                  style={{ backgroundColor: '#fef3c7' }}
+                >
+                  <div>
+                    <p className="font-semibold text-gray-800">Table {call.tableNumber}</p>
+                    <p className="text-gray-600 text-sm">
+                      Requested: {new Date(call.timestamp).toLocaleString()}
+                    </p>
+                  </div>
+                  <button
+                    className="px-3 py-2 rounded-lg text-white flex items-center justify-center text-sm"
+                    style={{ backgroundColor: '#16a34a' }}
+                    onClick={() => handleResolveStaffCall(call._id)}
+                  >
+                    <FaCheck className="mr-2" /> Mark Resolved
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Create Manual Order Tab */}
+      {activeTab === 'Create Manual Order' && (
+        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+          <h2 className="text-xl sm:text-2xl font-semibold mb-4 flex items-center">
+            <FaPlus className="mr-2" style={{ color: '#b45309' }} /> Create Manual Order
+          </h2>
+          <div className="mb-6">
+            <label className="block text-gray-700 text-sm font-medium mb-2">Table Number</label>
+            <input
+              type="number"
+              value={manualOrder.tableNumber}
+              onChange={e => setManualOrder({ ...manualOrder, tableNumber: e.target.value })}
+              className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500"
+              required
+            />
+          </div>
+          <div className="mb-6">
+            <h3 className="text-lg font-medium mb-3 flex items-center">
+              <FaHamburger className="mr-2" /> Select Items
+            </h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+              {menuItems.map(item => (
+                <div
+                  key={item._id}
+                  className="bg-gray-100 rounded-lg p-3 flex flex-col"
+                >
+                  <h4 className="font-semibold text-gray-800">{item.name}</h4>
+                  <p className="text-gray-600 text-sm flex items-center">
+                    <FaRupeeSign className="mr-1" />{item.price.toFixed(2)}
+                  </p>
+                  <button
+                    className="mt-2 px-3 py-1 rounded-lg text-white text-sm"
+                    style={{ backgroundColor: '#b45309' }}
+                    onClick={() => addToManualCart(item)}
+                  >
+                    Add
+                  </button>
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="mb-6">
+            <h3 className="text-lg font-medium mb-3 flex items-center">
+              <FaShoppingCart className="mr-2" /> Cart
+            </h3>
+            {manualOrder.cart.length === 0 ? (
+              <p className="text-gray-600">Cart is empty.</p>
+            ) : (
+              <div className="space-y-2">
+                {manualOrder.cart.map(item => (
+                  <div
+                    key={item.itemId}
+                    className="flex items-center justify-between p-2 border-b"
+                  >
+                    <div>
+                      <p className="text-gray-800">{item.name}</p>
+                      <p className="text-gray-600 text-sm flex items-center">
+                        <FaRupeeSign className="mr-1" />{(item.price * item.quantity).toFixed(2)}
+                      </p>
+                    </div>
+                    <div className="flex items-center space-x-2">
+                      <button
+                        className="px-2 py-1 bg-gray-200 rounded-l"
+                        onClick={() => updateManualQuantity(item.itemId, -1)}
+                      >
+                        -
+                      </button>
+                      <span className="px-3 py-1 bg-gray-100">{item.quantity}</span>
+                      <button
+                        className="px-2 py-1 bg-gray-200 rounded-r"
+                        onClick={() => updateManualQuantity(item.itemId, 1)}
+                      >
+                        +
+                      </button>
+                      <button
+                        className="text-red-500 hover:text-red-700"
+                        onClick={() => removeFromManualCart(item.itemId)}
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+          <div className="flex justify-between items-center">
+            <p className="font-bold text-gray-800 flex items-center">
+              Total: <FaRupeeSign className="ml-1 mr-1" />
+              {manualOrder.cart.reduce((sum, item) => sum + item.price * item.quantity, 0).toFixed(2)}
+            </p>
+            <button
+              className="px-4 py-2 rounded-lg text-white flex items-center"
+              style={{ backgroundColor: '#b45309' }}
+              onClick={placeManualOrder}
+            >
+              <FaCheck className="mr-2" /> Place Order
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Analytics Tab */}
       {activeTab === 'Analytics' && (
