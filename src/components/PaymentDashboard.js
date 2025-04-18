@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { FaPrint, FaCheck, FaUtensils, FaClock, FaChartLine, FaFileExport, FaTable, FaRupeeSign, FaTimes } from 'react-icons/fa';
+import { FaPrint, FaCheck, FaUtensils, FaClock, FaChartLine, FaFileExport, FaTable, FaRupeeSign } from 'react-icons/fa';
 
 function PaymentDashboard() {
   const [orders, setOrders] = useState([]);
@@ -14,11 +14,11 @@ function PaymentDashboard() {
     year: 0
   });
   const [activeTable, setActiveTable] = useState('All');
-  const [isAuthenticated, setIsAuthenticated] = useState(false); // For Feature 6
-  const [password, setPassword] = useState(''); // For Feature 6
+  const [activeTab, setActiveTab] = useState('Unpaid Bills'); // New tab state
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [password, setPassword] = useState('');
   const [customDateRange, setCustomDateRange] = useState({ startDate: '', endDate: '' });
 
-  // Feature 6: Password Protection
   useEffect(() => {
     const storedAuth = localStorage.getItem('paymentAuth');
     if (storedAuth) {
@@ -28,7 +28,7 @@ function PaymentDashboard() {
 
   const handleLogin = (e) => {
     e.preventDefault();
-    if (password === 'admin123') { // Replace with a secure password in production
+    if (password === 'admin123') {
       setIsAuthenticated(true);
       localStorage.setItem('paymentAuth', 'true');
       setError(null);
@@ -178,9 +178,28 @@ function PaymentDashboard() {
     }
   };
 
-  const filteredOrders = activeTable === 'All'
-    ? orders
-    : orders.filter(order => order.tableNumber.toString() === activeTable);
+  // Filter orders for Paid and Unpaid tabs
+  const todayStart = new Date();
+  todayStart.setHours(0, 0, 0, 0);
+  const todayEnd = new Date();
+  todayEnd.setHours(23, 59, 59, 999);
+
+  const paidOrders = orders.filter(order => 
+    order.status === 'Completed' &&
+    new Date(order.createdAt) >= todayStart &&
+    new Date(order.createdAt) <= todayEnd
+  );
+
+  const unpaidOrders = orders.filter(order => 
+    order.status === 'Pending' || order.status === 'Prepared'
+  );
+
+  const filteredOrders = activeTab === 'Paid Bills' ? paidOrders : unpaidOrders;
+
+  // Apply table filter
+  const tableFilteredOrders = activeTable === 'All'
+    ? filteredOrders
+    : filteredOrders.filter(order => order.tableNumber.toString() === activeTable);
 
   const chartData = [];
   const today = new Date();
@@ -215,7 +234,7 @@ function PaymentDashboard() {
                 required
               />
             </div>
-            {error && <p className="text-red-600 Gazzetta, serif text-sm mb-4">{error}</p>}
+            {error && <p className="text-red-600 text-sm mb-4">{error}</p>}
             <button
               type="submit"
               className="w-full px-4 py-2 rounded-lg text-white"
@@ -286,27 +305,25 @@ function PaymentDashboard() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-        {[
-          { label: 'Today', value: revenueData.today },
-          { label: 'This Week', value: revenueData.week },
-          { label: 'This Month', value: revenueData.month },
-          { label: 'This Year', value: revenueData.year }
-        ].map((metric, index) => (
-          <div
-            key={index}
-            className="bg-white rounded-lg shadow-md p-4 flex items-center"
-            style={{ backgroundColor: '#fef3c7' }}
-          >
-            <FaRupeeSign className="text-amber-600 text-2xl mr-3" />
-            <div>
-              <p className="text-gray-600 text-sm">{metric.label}</p>
-              <p className="text-xl font-bold flex items-center">
-                <FaRupeeSign className="mr-1" />{metric.value.toFixed(2)}
-              </p>
-            </div>
-          </div>
-        ))}
+      <div className="mb-6">
+        <h2 className="text-xl sm:text-2xl font-semibold mb-4 flex items-center">
+          <FaTable className="mr-2" style={{ color: '#b45309' }} /> Tabs
+        </h2>
+        <div className="flex flex-wrap gap-2">
+          {['Unpaid Bills', 'Paid Bills'].map(tab => (
+            <button
+              key={tab}
+              className="px-3 py-2 rounded-lg text-sm font-medium"
+              style={{
+                backgroundColor: activeTab === tab ? '#b45309' : '#fed7aa',
+                color: activeTab === tab ? '#ffffff' : '#1f2937'
+              }}
+              onClick={() => setActiveTab(tab)}
+            >
+              {tab}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="mb-6">
@@ -361,7 +378,7 @@ function PaymentDashboard() {
       <div className="mb-6">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl sm:text-2xl font-semibold flex items-center">
-            <FaUtensils className="mr-2" style={{ color: '#b45309' }} /> Orders
+            <FaUtensils className="mr-2" style={{ color: '#b45309' }} /> {activeTab}
           </h2>
           <button
             className="px-4 py-2 rounded-lg text-white flex items-center"
@@ -372,10 +389,10 @@ function PaymentDashboard() {
           </button>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {filteredOrders.length === 0 ? (
-            <p className="text-center col-span-full text-gray-600">No orders found.</p>
+          {tableFilteredOrders.length === 0 ? (
+            <p className="text-center col-span-full text-gray-600">No {activeTab.toLowerCase()} found.</p>
           ) : (
-            filteredOrders.map(order => (
+            tableFilteredOrders.map(order => (
               <div
                 key={order._id}
                 className="bg-white rounded-lg shadow-md p-4"
@@ -410,15 +427,15 @@ function PaymentDashboard() {
                   Total: <FaRupeeSign className="ml-1 mr-1" />
                   {order.items.reduce((sum, item) => sum + (item.quantity * (item.itemId ? item.itemId.price : 0)), 0).toFixed(2)}
                 </p>
-                <div className="mt-4 flex flex-col sm:flex-row gap-2">
-                  <button
-                    className="w-full sm:w-auto px-3 py-2 rounded-lg text-white flex items-center justify-center text-sm"
-                    style={{ backgroundColor: '#2563eb' }}
-                    onClick={() => handlePrintBill(order)}
-                  >
-                    <FaPrint className="mr-2" /> Print Bill
-                  </button>
-                  {order.status !== 'Completed' && (
+                {activeTab === 'Unpaid Bills' && (
+                  <div className="mt-4 flex flex-col sm:flex-row gap-2">
+                    <button
+                      className="w-full sm:w-auto px-3 py-2 rounded-lg text-white flex items-center justify-center text-sm"
+                      style={{ backgroundColor: '#2563eb' }}
+                      onClick={() => handlePrintBill(order)}
+                    >
+                      <FaPrint className="mr-2" /> Print Bill
+                    </button>
                     <button
                       className="w-full sm:w-auto px-3 py-2 rounded-lg text-white flex items-center justify-center text-sm"
                       style={{ backgroundColor: '#16a34a' }}
@@ -426,8 +443,8 @@ function PaymentDashboard() {
                     >
                       <FaCheck className="mr-2" /> Confirm Payment
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
               </div>
             ))
           )}

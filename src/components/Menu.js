@@ -10,44 +10,74 @@ function Menu() {
   const [isMiniCartOpen, setIsMiniCartOpen] = useState(false);
   const [error, setError] = useState(null);
   const [addedItemId, setAddedItemId] = useState(null);
-  const [orderSummary, setOrderSummary] = useState(null); // For Feature 2
-  const [showOrderSummary, setShowOrderSummary] = useState(false); // For Feature 2
-  const [isSessionValid, setIsSessionValid] = useState(false); // For session validation
+  const [orderSummary, setOrderSummary] = useState(null);
+  const [showOrderSummary, setShowOrderSummary] = useState(false);
+  const [isSessionValid, setIsSessionValid] = useState(false);
+  const [latestOrderId, setLatestOrderId] = useState(null); // Track latest order
 
   const location = useLocation();
   const navigate = useNavigate();
   const tableNumber = new URLSearchParams(location.search).get('table') || 'Unknown';
 
-  // Session validation logic
+  // Session and order status validation
   useEffect(() => {
-    const checkSession = () => {
+    const checkSessionAndOrderStatus = async () => {
       const session = JSON.parse(localStorage.getItem(`table_${tableNumber}_session`));
-      if (session && session.expiresAt > Date.now()) {
+      const now = Date.now();
+
+      // Check if there's an active session
+      if (session && session.expiresAt > now && !session.orderId) {
         setIsSessionValid(true);
-      } else {
-        setIsSessionValid(false);
-        localStorage.removeItem(`table_${tableNumber}_session`);
+        return;
       }
+
+      // If there's an order, check its status
+      if (session && session.orderId) {
+        try {
+          const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/orders/${session.orderId}`);
+          const order = response.data;
+          if (order.status !== 'Prepared' && order.status !== 'Completed') {
+            // Extend session if order is not Prepared or Completed
+            setIsSessionValid(true);
+          } else {
+            // Invalidate session if order is Prepared or Completed
+            localStorage.removeItem(`table_${tableNumber}_session`);
+            setIsSessionValid(false);
+            setLatestOrderId(null);
+          }
+        } catch (err) {
+          console.error('Error checking order status:', err);
+          setError('Failed to validate order status.');
+          setIsSessionValid(false);
+        }
+        return;
+      }
+
+      // No valid session or order
+      localStorage.removeItem(`table_${tableNumber}_session`);
+      setIsSessionValid(false);
     };
 
-    // Initialize session on first load
+    // Initialize session on first load (from QR scan)
     const initializeSession = () => {
       const session = {
         tableNumber,
         expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes from now
+        orderId: null, // No order yet
       };
       localStorage.setItem(`table_${tableNumber}_session`, JSON.stringify(session));
       setIsSessionValid(true);
     };
 
+    // Check if session exists; if not, initialize (simulating QR scan)
     if (!localStorage.getItem(`table_${tableNumber}_session`)) {
       initializeSession();
     } else {
-      checkSession();
+      checkSessionAndOrderStatus();
     }
 
-    // Check session validity every 30 seconds
-    const interval = setInterval(checkSession, 30000);
+    // Periodically check session and order status every 30 seconds
+    const interval = setInterval(checkSessionAndOrderStatus, 30000);
     return () => clearInterval(interval);
   }, [tableNumber]);
 
@@ -153,12 +183,17 @@ function Menu() {
           total: cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
           createdAt: new Date()
         });
+        setLatestOrderId(res.data._id); // Store order ID
+        // Update session with order ID
+        const session = JSON.parse(localStorage.getItem(`table_${tableNumber}_session`));
+        if (session) {
+          session.orderId = res.data._id;
+          localStorage.setItem(`table_${tableNumber}_session`, JSON.stringify(session));
+        }
         alert('Congratulations, Your Order is placed successfully. Please wait 10-15 minutes until we prepare fresh food, just for you.');
         setCart([]);
         setIsMiniCartOpen(false);
-        // Invalidate session after order
-        localStorage.removeItem(`table_${tableNumber}_session`);
-        setIsSessionValid(false);
+        setShowOrderSummary(true); // Show order summary after placing order
       })
       .catch(err => {
         console.error('Error placing order:', err);
@@ -169,12 +204,10 @@ function Menu() {
   const totalPrice = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  // Feature 2: Show Order Summary
   const toggleOrderSummary = () => {
     setShowOrderSummary(!showOrderSummary);
   };
 
-  // Feature 3: Call Staff
   const callStaff = () => {
     axios.post(`${process.env.REACT_APP_API_URL}/api/staff-calls`, {
       tableNumber: parseInt(tableNumber),
