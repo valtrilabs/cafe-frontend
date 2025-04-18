@@ -13,78 +13,106 @@ function Menu() {
   const [orderSummary, setOrderSummary] = useState(null);
   const [showOrderSummary, setShowOrderSummary] = useState(false);
   const [isSessionValid, setIsSessionValid] = useState(false);
-  const [latestOrderId, setLatestOrderId] = useState(null); // Track latest order
+  const [latestOrderId, setLatestOrderId] = useState(null);
+  const [hasActiveOrder, setHasActiveOrder] = useState(false);
 
   const location = useLocation();
   const navigate = useNavigate();
   const tableNumber = new URLSearchParams(location.search).get('table') || 'Unknown';
+  const token = new URLSearchParams(location.search).get('token');
 
   // Session and order status validation
   useEffect(() => {
-    const checkSessionAndOrderStatus = async () => {
+    const validateSession = async () => {
       const session = JSON.parse(localStorage.getItem(`table_${tableNumber}_session`));
       const now = Date.now();
 
-      // Check if there's an active session
-      if (session && session.expiresAt > now && !session.orderId) {
-        setIsSessionValid(true);
+      if (!session || !session.token) {
+        setIsSessionValid(false);
         return;
       }
 
-      // If there's an order, check its status
-      if (session && session.orderId) {
-        try {
-          const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/orders/${session.orderId}`);
-          const order = response.data;
+      // Validate session token and check for active orders
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/orders/qr-session`, {
+          params: { tableNumber, token: session.token }
+        });
+        if (response.data.valid && session.expiresAt > now && !session.orderId) {
+          setIsSessionValid(true);
+          checkActiveOrders();
+          return;
+        }
+
+        if (session.orderId) {
+          const orderResponse = await axios.get(`${process.env.REACT_APP_API_URL}/api/orders/${session.orderId}`);
+          const order = orderResponse.data;
           if (order.status !== 'Prepared' && order.status !== 'Completed') {
-            // Extend session if order is not Prepared or Completed
             setIsSessionValid(true);
+            setHasActiveOrder(true);
           } else {
-            // Invalidate session if order is Prepared or Completed
             localStorage.removeItem(`table_${tableNumber}_session`);
             setIsSessionValid(false);
             setLatestOrderId(null);
+            setHasActiveOrder(false);
           }
-        } catch (err) {
-          console.error('Error checking order status:', err);
-          setError('Failed to validate order status.');
+        } else {
+          localStorage.removeItem(`table_${tableNumber}_session`);
           setIsSessionValid(false);
         }
-        return;
+      } catch (err) {
+        console.error('Error validating session:', err);
+        setError('Failed to validate session.');
+        setIsSessionValid(false);
       }
-
-      // No valid session or order
-      localStorage.removeItem(`table_${tableNumber}_session`);
-      setIsSessionValid(false);
     };
 
-    // Initialize session on first load (from QR scan)
-    const initializeSession = () => {
-      const session = {
-        tableNumber,
-        expiresAt: Date.now() + 10 * 60 * 1000, // 10 minutes from now
-        orderId: null, // No order yet
-      };
-      localStorage.setItem(`table_${tableNumber}_session`, JSON.stringify(session));
-      setIsSessionValid(true);
+    const checkActiveOrders = async () => {
+      try {
+        const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/orders`, {
+          params: { tableNumber, status: 'active' }
+        });
+        setHasActiveOrder(response.data.length > 0);
+      } catch (err) {
+        console.error('Error checking active orders:', err);
+        setError('Failed to check active orders.');
+      }
     };
 
-    // Check if session exists; if not, initialize (simulating QR scan)
-    if (!localStorage.getItem(`table_${tableNumber}_session`)) {
-      initializeSession();
+    if (token) {
+      // Initialize session from QR scan
+      axios.post(`${process.env.REACT_APP_API_URL}/api/orders/qr-session`, { tableNumber, token })
+        .then(res => {
+          if (res.data.valid) {
+            const session = {
+              tableNumber,
+              token,
+              expiresAt: Date.now() + 10 * 60 * 1000,
+              orderId: null
+            };
+            localStorage.setItem(`table_${tableNumber}_session`, JSON.stringify(session));
+            setIsSessionValid(true);
+            checkActiveOrders();
+          } else {
+            setIsSessionValid(false);
+            setError('Invalid QR code.');
+          }
+        })
+        .catch(err => {
+          console.error('Error initializing session:', err);
+          setError('Failed to initialize session.');
+          setIsSessionValid(false);
+        });
     } else {
-      checkSessionAndOrderStatus();
+      validateSession();
     }
 
-    // Periodically check session and order status every 30 seconds
-    const interval = setInterval(checkSessionAndOrderStatus, 30000);
+    const interval = setInterval(validateSession, 30000);
     return () => clearInterval(interval);
-  }, [tableNumber]);
+  }, [tableNumber, token]);
 
   const fetchMenu = () => {
     axios.get(`${process.env.REACT_APP_API_URL}/api/menu`)
       .then(res => {
-        console.log('Menu items fetched:', res.data);
         setMenuItems(res.data);
         setError(null);
       })
@@ -120,43 +148,42 @@ function Menu() {
     : menuItems.filter(item => item.category === selectedCategory);
 
   const addToCart = (item) => {
-    try {
-      console.log('Adding to cart:', item);
-      const existingItem = cart.find(cartItem => cartItem.itemId === item._id);
-      const placeholderImages = {
-        'Main Course': 'https://source.unsplash.com/100x100/?sandwich',
-        'Drinks': 'https://source.unsplash.com/100x100/?smoothie',
-        'Street Food': 'https://source.unsplash.com/100x100/?streetfood',
-        'Salads': 'https://source.unsplash.com/100x100/?salad',
-        'Desserts': 'https://source.unsplash.com/100x100/?dessert'
-      };
-      const itemCategory = item.category || 'Uncategorized';
-      const itemImage = item.image
-        ? `${process.env.REACT_APP_API_URL}${item.image}`
-        : placeholderImages[itemCategory] || 'https://source.unsplash.com/100x100/?food';
-
-      if (existingItem) {
-        setCart(cart.map(cartItem =>
-          cartItem.itemId === item._id
-            ? { ...cartItem, quantity: cartItem.quantity + 1 }
-            : cartItem
-        ));
-      } else {
-        setCart([...cart, {
-          itemId: item._id,
-          name: item.name,
-          price: item.price,
-          quantity: 1,
-          image: itemImage,
-          category: itemCategory
-        }]);
-      }
-      setIsMiniCartOpen(true);
-      setAddedItemId(item._id);
-      setTimeout(() => setAddedItemId(null), 1000);
-    } catch (error) {
-      console.error('Error adding to cart:', error);
+    if (hasActiveOrder) {
+      setError('Please wait until your current order is prepared before placing a new order.');
+      return;
     }
+    const existingItem = cart.find(cartItem => cartItem.itemId === item._id);
+    const placeholderImages = {
+      'Main Course': 'https://source.unsplash.com/100x100/?sandwich',
+      'Drinks': 'https://source.unsplash.com/100x100/?smoothie',
+      'Street Food': 'https://source.unsplash.com/100x100/?streetfood',
+      'Salads': 'https://source.unsplash.com/100x100/?salad',
+      'Desserts': 'https://source.unsplash.com/100x100/?dessert'
+    };
+    const itemCategory = item.category || 'Uncategorized';
+    const itemImage = item.image
+      ? `${process.env.REACT_APP_API_URL}${item.image}`
+      : placeholderImages[itemCategory] || 'https://source.unsplash.com/100x100/?food';
+
+    if (existingItem) {
+      setCart(cart.map(cartItem =>
+        cartItem.itemId === item._id
+          ? { ...cartItem, quantity: cartItem.quantity + 1 }
+          : cartItem
+      ));
+    } else {
+      setCart([...cart, {
+        itemId: item._id,
+        name: item.name,
+        price: item.price,
+        quantity: 1,
+        image: itemImage,
+        category: itemCategory
+      }]);
+    }
+    setIsMiniCartOpen(true);
+    setAddedItemId(item._id);
+    setTimeout(() => setAddedItemId(null), 1000);
   };
 
   const updateQuantity = (itemId, delta) => {
@@ -172,6 +199,10 @@ function Menu() {
   };
 
   const placeOrder = () => {
+    if (hasActiveOrder) {
+      setError('Please wait until your current order is prepared before placing a new order.');
+      return;
+    }
     axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, {
       tableNumber: parseInt(tableNumber),
       items: cart.map(item => ({ itemId: item.itemId, quantity: item.quantity }))
@@ -183,8 +214,7 @@ function Menu() {
           total: cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
           createdAt: new Date()
         });
-        setLatestOrderId(res.data._id); // Store order ID
-        // Update session with order ID
+        setLatestOrderId(res.data._id);
         const session = JSON.parse(localStorage.getItem(`table_${tableNumber}_session`));
         if (session) {
           session.orderId = res.data._id;
@@ -193,11 +223,11 @@ function Menu() {
         alert('Congratulations, Your Order is placed successfully. Please wait 10-15 minutes until we prepare fresh food, just for you.');
         setCart([]);
         setIsMiniCartOpen(false);
-        setShowOrderSummary(true); // Show order summary after placing order
+        setShowOrderSummary(true);
       })
       .catch(err => {
         console.error('Error placing order:', err);
-        setError('Failed to place order. Please try again.');
+        setError(err.response?.data?.error || 'Failed to place order. Please try again.');
       });
   };
 
@@ -242,7 +272,6 @@ function Menu() {
 
   return (
     <div className="min-h-screen bg-orange-50 pb-32">
-      {/* Sticky Header */}
       <header 
         className="sticky top-0 shadow-lg z-50 border-b-2 border-amber-900" 
         style={{ backgroundColor: '#92400e', color: '#ffffff' }}
@@ -269,7 +298,6 @@ function Menu() {
         </div>
       </header>
 
-      {/* Order Summary Modal */}
       {showOrderSummary && orderSummary && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
@@ -299,7 +327,6 @@ function Menu() {
         </div>
       )}
 
-      {/* Call Staff Button */}
       <div className="container mx-auto p-2 sm:p-4">
         <button
           className="w-full sm:w-auto px-4 py-2 rounded-lg text-white flex items-center justify-center mb-4"
@@ -310,21 +337,22 @@ function Menu() {
         </button>
       </div>
 
-      {/* Error Message */}
       {error && (
         <div className="container mx-auto p-2 sm:p-4 text-center text-red-600">
           <p>{error}</p>
           <button
             className="mt-2 px-3 sm:px-4 py-1 sm:py-2 rounded-lg text-white text-sm"
             style={{ backgroundColor: '#b45309' }}
-            onClick={fetchMenu}
+            onClick={() => {
+              setError(null);
+              fetchMenu();
+            }}
           >
             Retry
           </button>
         </div>
       )}
 
-      {/* Category Tabs */}
       <div className="container mx-auto p-2 sm:p-4">
         {categories.length === 1 ? (
           <p className="text-center text-gray-600 text-sm">No categories available.</p>
@@ -352,7 +380,6 @@ function Menu() {
         )}
       </div>
 
-      {/* Menu Items */}
       <div className="container mx-auto p-2 sm:p-4">
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
           {filteredItems.length === 0 ? (
@@ -388,12 +415,12 @@ function Menu() {
                     } ${addedItemId === item._id ? 'animate-pulse' : ''}`}
                     style={{ backgroundColor: item.isAvailable ? '#16a34a' : '#ef4444' }}
                     onClick={() => addToCart(item)}
-                    disabled={!item.isAvailable}
+                    disabled={!item.isAvailable || hasActiveOrder}
                   >
                     {item.isAvailable ? (
                       <>
                         <FaShoppingCart className="mr-1 sm:mr-2" /> 
-                        {addedItemId === item._id ? 'Added!' : 'Add to Cart'}
+                        {addedItemId === item._id ? 'Added!' : hasActiveOrder ? 'Order Pending' : 'Add to Cart'}
                       </>
                     ) : (
                       'Sold Out'
@@ -406,7 +433,6 @@ function Menu() {
         </div>
       </div>
 
-      {/* Persistent Mini-Cart */}
       {cart.length > 0 || isMiniCartOpen ? (
         <div
           className={`fixed bottom-0 left-0 right-0 bg-white shadow-2xl z-30 transition-all duration-300 ${
@@ -481,11 +507,11 @@ function Menu() {
                   </p>
                   <button
                     className="w-full sm:w-auto px-4 sm:px-6 py-1 sm:py-2 rounded-lg text-white transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center text-xs sm:text-sm"
-                    style={{ backgroundColor: cart.length === 0 ? '#9ca3af' : '#b45309' }}
+                    style={{ backgroundColor: cart.length === 0 || hasActiveOrder ? '#9ca3af' : '#b45309' }}
                     onClick={placeOrder}
-                    disabled={cart.length === 0}
+                    disabled={cart.length === 0 || hasActiveOrder}
                   >
-                    <FaUtensils className="mr-1 sm:mr-2" /> Order Now
+                    <FaUtensils className="mr-1 sm:mr-2" /> {hasActiveOrder ? 'Order Pending' : 'Order Now'}
                   </button>
                 </div>
               </div>
