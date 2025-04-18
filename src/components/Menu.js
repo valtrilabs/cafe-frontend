@@ -84,6 +84,9 @@ function Menu() {
           console.log('Latest order status:', res.data);
           setOrderStatus(res.data.status);
           setLatestOrder(res.data);
+          if (res.data.status === 'Prepared' || res.data.status === 'Completed') {
+            setSessionToken(null); // Clear sessionToken to prevent ordering
+          }
         }
       })
       .catch(err => {
@@ -105,6 +108,10 @@ function Menu() {
   }, [tableNumber]);
 
   const retrySession = () => {
+    if (orderStatus === 'Prepared' || orderStatus === 'Completed') {
+      setError('Please scan the QR code again to place a new order.');
+      return;
+    }
     setError(null);
     setIsLoading(true);
     initializeSession();
@@ -196,7 +203,7 @@ function Menu() {
       return;
     }
     if (orderStatus === 'Prepared' || orderStatus === 'Completed') {
-      setError('Cannot place order. Your previous order is already prepared or completed.');
+      setError('Cannot place order. Your previous order is already prepared or completed. Please scan the QR code again.');
       return;
     }
     axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, {
@@ -237,7 +244,7 @@ function Menu() {
         <div className="container mx-auto p-2 sm:p-4 flex justify-between items-center">
           <h1 className="text-lg sm:text-2xl font-bold flex items-center">
             <FaUtensils className="mr-2" style={{ color: '#fcd34d' }} /> 
-            GSaheb Cafe Menu - Table {tableNumber || 'Unknown'}
+            Welcome to GSaheb Cafe - Table {tableNumber || 'Unknown'}
           </h1>
           <div className="flex items-center space-x-2 sm:space-x-4">
             <span 
@@ -264,13 +271,15 @@ function Menu() {
       {error && !isLoading && (
         <div className="container mx-auto p-2 sm:p-4 text-center text-red-600">
           <p>{error}</p>
-          <button
-            className="mt-2 px-3 sm:px-4 py-1 sm:py-2 rounded-lg text-white text-sm"
-            style={{ backgroundColor: '#b45309' }}
-            onClick={retrySession}
-          >
-            Retry
-          </button>
+          {(orderStatus !== 'Prepared' && orderStatus !== 'Completed') && (
+            <button
+              className="mt-2 px-3 sm:px-4 py-1 sm:py-2 rounded-lg text-white text-sm"
+              style={{ backgroundColor: '#b45309' }}
+              onClick={retrySession}
+            >
+              Retry
+            </button>
+          )}
         </div>
       )}
 
@@ -279,7 +288,7 @@ function Menu() {
         <div className="container mx-auto p-2 sm:p-4">
           <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 text-center">
             <p className="text-lg text-gray-700">
-              Your order is {orderStatus.toLowerCase()}. Please contact staff to place a new order.
+              Your order is {orderStatus.toLowerCase()}. Please scan the QR code again to place a new order.
             </p>
             <button
               className="mt-4 px-4 py-2 rounded-lg text-white flex items-center mx-auto"

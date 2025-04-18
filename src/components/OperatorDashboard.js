@@ -32,6 +32,7 @@ function OperatorDashboard() {
     searchQuery: ''
   });
   const [filteredMenuItems, setFilteredMenuItems] = useState([]);
+  const [newEditItem, setNewEditItem] = useState({ itemId: '', quantity: 1 });
 
   const fetchOrders = (tab) => {
     const now = new Date();
@@ -131,8 +132,33 @@ function OperatorDashboard() {
       }));
     setEditingOrder({
       ...order,
-      items: validItems
+      items: validItems,
+      orderNumber: order.orderNumber
     });
+  };
+
+  const handleAddItemToEdit = () => {
+    if (!newEditItem.itemId || newEditItem.quantity < 1) {
+      setError('Please select a menu item and specify a valid quantity.');
+      return;
+    }
+    const selectedItem = menuItems.find(item => item._id === newEditItem.itemId);
+    if (!selectedItem) {
+      setError('Selected menu item not found.');
+      return;
+    }
+    const newItem = {
+      itemId: selectedItem._id,
+      name: selectedItem.name,
+      price: selectedItem.price,
+      quantity: parseInt(newEditItem.quantity)
+    };
+    setEditingOrder({
+      ...editingOrder,
+      items: [...editingOrder.items, newItem]
+    });
+    setNewEditItem({ itemId: '', quantity: 1 });
+    setError(null);
   };
 
   const handleSaveEdit = () => {
@@ -147,6 +173,7 @@ function OperatorDashboard() {
       .then(() => {
         fetchOrders(activeTab === 'Today' ? 'Today' : activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
         setEditingOrder(null);
+        setError(null);
       })
       .catch(err => {
         console.error('Error saving order:', err);
@@ -218,7 +245,7 @@ function OperatorDashboard() {
     axios.put(`${process.env.REACT_APP_API_URL}/api/menu/${itemId}`, { isAvailable: !currentAvailability })
       .then((response) => {
         console.log('Availability toggled:', response.data);
-        fetchMenuItems(); // Refresh menu items to reflect the change
+        fetchMenuItems();
         setError(null);
       })
       .catch(err => {
@@ -289,7 +316,8 @@ function OperatorDashboard() {
       items: manualOrder.items.map(item => ({
         itemId: item.itemId,
         quantity: item.quantity
-      }))
+      })),
+      isManual: true
     };
     console.log('Placing manual order:', payload);
     axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, payload)
@@ -829,13 +857,15 @@ function OperatorDashboard() {
                         </button>
                       </>
                     )}
-                    <button
-                      className="px-3 py-1 rounded-lg text-white text-sm"
-                      style={{ backgroundColor: '#ef4444' }}
-                      onClick={() => handleCancelOrder(order._id)}
-                    >
-                      <FaTimes className="inline mr-1" /> Cancel
-                    </button>
+                    {order.status === 'Pending' && (
+                      <button
+                        className="px-3 py-1 rounded-lg text-white text-sm"
+                        style={{ backgroundColor: '#ef4444' }}
+                        onClick={() => handleCancelOrder(order._id)}
+                      >
+                        <FaTimes className="inline mr-1" /> Cancel
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -852,6 +882,15 @@ function OperatorDashboard() {
               <FaEdit className="mr-2" style={{ color: '#b45309' }} /> Edit Order #{editingOrder.orderNumber}
             </h2>
             <div className="space-y-4">
+              <div>
+                <label className="block text-gray-700 text-sm font-medium">Order Number</label>
+                <input
+                  type="text"
+                  value={editingOrder.orderNumber}
+                  onChange={e => setEditingOrder({ ...editingOrder, orderNumber: e.target.value })}
+                  className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
               <div>
                 <label className="block text-gray-700 text-sm font-medium">Table Number</label>
                 <input
@@ -903,6 +942,38 @@ function OperatorDashboard() {
                     </div>
                   </div>
                 ))}
+              </div>
+              <div>
+                <h3 className="text-lg font-medium mb-2">Add New Item</h3>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <select
+                    value={newEditItem.itemId}
+                    onChange={e => setNewEditItem({ ...newEditItem, itemId: e.target.value })}
+                    className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500"
+                  >
+                    <option value="">Select Menu Item</option>
+                    {menuItems.map(item => (
+                      <option key={item._id} value={item._id}>
+                        {item.name} ({item.category}, ₹{item.price.toFixed(2)})
+                      </option>
+                    ))}
+                  </select>
+                  <input
+                    type="number"
+                    min="1"
+                    value={newEditItem.quantity}
+                    onChange={e => setNewEditItem({ ...newEditItem, quantity: parseInt(e.target.value) || 1 })}
+                    className="w-full sm:w-24 border rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500"
+                    placeholder="Qty"
+                  />
+                  <button
+                    className="px-3 py-2 rounded-lg text-white"
+                    style={{ backgroundColor: '#16a34a' }}
+                    onClick={handleAddItemToEdit}
+                  >
+                    <FaPlus className="inline mr-1" /> Add
+                  </button>
+                </div>
               </div>
               <div className="flex justify-end space-x-2">
                 <button
