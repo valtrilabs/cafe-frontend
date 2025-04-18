@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useLocation } from 'react-router-dom';
-import { FaShoppingCart, FaUtensils, FaRupeeSign, FaHistory, FaCheck } from 'react-icons/fa';
+import { FaShoppingCart, FaUtensils, FaRupeeSign, FaHistory, FaCheck, FaSpinner } from 'react-icons/fa';
 
 function Menu() {
   const [menuItems, setMenuItems] = useState([]);
@@ -10,24 +10,70 @@ function Menu() {
   const [isMiniCartOpen, setIsMiniCartOpen] = useState(false);
   const [error, setError] = useState(null);
   const [addedItemId, setAddedItemId] = useState(null);
-  const [session, setSession] = useState(null);
+  const [sessionToken, setSessionToken] = useState(null);
   const [orderStatus, setOrderStatus] = useState(null);
   const [showSummary, setShowSummary] = useState(false);
   const [latestOrder, setLatestOrder] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const location = useLocation();
   const tableNumber = new URLSearchParams(location.search).get('table');
+
+  const initializeSession = () => {
+    if (!tableNumber || isNaN(tableNumber)) {
+      setError('Invalid or missing table number. Please scan a valid QR code.');
+      setIsLoading(false);
+      return;
+    }
+
+    axios.post(`${process.env.REACT_APP_API_URL}/api/orders/session`, { tableNumber: parseInt(tableNumber) })
+      .then(res => {
+        console.log('Session initialized:', res.data);
+        setSessionToken(res.data.token);
+        setError(null);
+        checkOrderStatus();
+      })
+      .catch(err => {
+        console.error('Error initializing session:', {
+          status: err.response?.status,
+          data: err.response?.data,
+          message: err.message
+        });
+        let errorMsg = 'Failed to initialize session. ';
+        if (err.response) {
+          if (err.response.status === 404) {
+            errorMsg += 'Session endpoint not found. Check backend deployment.';
+          } else if (err.response.status === 500) {
+            errorMsg += 'Backend server error. Try again later.';
+          } else if (err.response.status === 400) {
+            errorMsg += 'Invalid request. Check table number.';
+          } else {
+            errorMsg += `HTTP ${err.response.status}: ${err.response.data?.error || 'Unknown error'}.`;
+          }
+        } else if (err.request) {
+          errorMsg += 'No response from server. Check backend URL or network.';
+        } else {
+          errorMsg += err.message;
+        }
+        setError(errorMsg);
+      })
+      .finally(() => setIsLoading(false));
+  };
 
   const fetchMenu = () => {
     axios.get(`${process.env.REACT_APP_API_URL}/api/menu`)
       .then(res => {
         console.log('Menu items fetched:', res.data);
         setMenuItems(res.data.filter(item => item.isAvailable));
-        setError(null);
+        if (!error) setError(null);
       })
       .catch(err => {
-        console.error('Error fetching menu:', err);
-        setError('Failed to load menu. Please try again.');
+        console.error('Error fetching menu:', {
+          status: err.response?.status,
+          data: err.response?.data,
+          message: err.message
+        });
+        setError('Failed to load menu. Check backend connection or try again.');
       });
   };
 
@@ -35,12 +81,17 @@ function Menu() {
     axios.get(`${process.env.REACT_APP_API_URL}/api/orders/latest/${tableNumber}`)
       .then(res => {
         if (res.data) {
+          console.log('Latest order status:', res.data);
           setOrderStatus(res.data.status);
           setLatestOrder(res.data);
         }
       })
       .catch(err => {
-        console.error('Error checking order status:', err);
+        console.error('Error checking order status:', {
+          status: err.response?.status,
+          data: err.response?.data,
+          message: err.message
+        });
         if (err.response?.status !== 404) {
           setError('Failed to check order status.');
         }
@@ -48,23 +99,16 @@ function Menu() {
   };
 
   useEffect(() => {
-    if (!tableNumber || isNaN(tableNumber)) {
-      setError('Invalid or missing table number. Please scan a valid QR code.');
-      return;
-    }
-
-    // Initialize session
-    axios.post(`${process.env.REACT_APP_API_URL}/api/sessions`, { tableNumber: parseInt(tableNumber) })
-      .then(res => {
-        setSession(res.data);
-        fetchMenu();
-        checkOrderStatus();
-      })
-      .catch(err => {
-        console.error('Error initializing session:', err);
-        setError('Failed to initialize session. Please try again.');
-      });
+    setIsLoading(true);
+    fetchMenu(); // Fetch menu immediately
+    initializeSession();
   }, [tableNumber]);
+
+  const retrySession = () => {
+    setError(null);
+    setIsLoading(true);
+    initializeSession();
+  };
 
   const categories = [
     { name: 'All', icon: '🌟' },
@@ -86,6 +130,10 @@ function Menu() {
     : menuItems.filter(item => item.category === selectedCategory);
 
   const addToCart = (item) => {
+    if (!sessionToken) {
+      setError('Cannot add items. Session not initialized. Please retry.');
+      return;
+    }
     if (orderStatus === 'Prepared' || orderStatus === 'Completed') {
       setError('Cannot add items. Your previous order is already prepared or completed.');
       return;
@@ -143,8 +191,8 @@ function Menu() {
   };
 
   const placeOrder = () => {
-    if (!session || cart.length === 0) {
-      setError('Cart is empty or session is invalid.');
+    if (!sessionToken || cart.length === 0) {
+      setError('Cart is empty or session is invalid. Please retry session initialization.');
       return;
     }
     if (orderStatus === 'Prepared' || orderStatus === 'Completed') {
@@ -152,11 +200,12 @@ function Menu() {
       return;
     }
     axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, {
-      sessionId: session._id,
+      sessionToken,
       tableNumber: parseInt(tableNumber),
       items: cart.map(item => ({ itemId: item.itemId, quantity: item.quantity }))
     })
       .then(res => {
+        console.log('Order placed:', res.data);
         alert('Congratulations, Your Order is placed successfully. Please wait 10-15 minutes until we prepare fresh food, just for you.');
         setCart([]);
         setIsMiniCartOpen(false);
@@ -166,7 +215,11 @@ function Menu() {
         return res.data.orderNumber;
       })
       .catch(err => {
-        console.error('Error placing order:', err);
+        console.error('Error placing order:', {
+          status: err.response?.status,
+          data: err.response?.data,
+          message: err.message
+        });
         setError('Failed to place order. Please try again.');
       });
   };
@@ -199,14 +252,22 @@ function Menu() {
         </div>
       </header>
 
+      {/* Loading State */}
+      {isLoading && (
+        <div className="container mx-auto p-2 sm:p-4 text-center">
+          <FaSpinner className="animate-spin text-4xl text-amber-600 mx-auto" />
+          <p className="mt-2 text-gray-600">Loading menu...</p>
+        </div>
+      )}
+
       {/* Error Message */}
-      {error && (
+      {error && !isLoading && (
         <div className="container mx-auto p-2 sm:p-4 text-center text-red-600">
           <p>{error}</p>
           <button
             className="mt-2 px-3 sm:px-4 py-1 sm:py-2 rounded-lg text-white text-sm"
             style={{ backgroundColor: '#b45309' }}
-            onClick={fetchMenu}
+            onClick={retrySession}
           >
             Retry
           </button>
@@ -230,89 +291,91 @@ function Menu() {
           </div>
         </div>
       ) : (
-        <>
-          {/* Category Tabs */}
-          <div className="container mx-auto p-2 sm:p-4">
-            {categories.length === 1 ? (
-              <p className="text-center text-gray-600 text-sm">No categories available.</p>
-            ) : (
-              <div className="flex overflow-x-auto space-x-1 sm:space-x-2 pb-2">
-                {categories.map(category => (
-                  <button
-                    key={category.name}
-                    className={`flex items-center px-3 sm:px-4 py-1 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
-                      selectedCategory === category.name
-                        ? 'shadow-md hover:bg-amber-700'
-                        : 'hover:bg-amber-300'
-                    }`}
-                    style={{
-                      backgroundColor: selectedCategory === category.name ? '#b45309' : '#fed7aa',
-                      color: selectedCategory === category.name ? '#ffffff' : '#1f2937'
-                    }}
-                    onClick={() => setSelectedCategory(category.name)}
-                  >
-                    <span className="mr-1 sm:mr-2">{category.icon}</span>
-                    {category.name}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Menu Items */}
-          <div className="container mx-auto p-2 sm:p-4">
-            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
-              {filteredItems.length === 0 ? (
-                <p className="text-center col-span-full text-gray-600 text-sm">
-                  No items available.
-                </p>
+        !isLoading && (
+          <>
+            {/* Category Tabs */}
+            <div className="container mx-auto p-2 sm:p-4">
+              {categories.length === 1 ? (
+                <p className="text-center text-gray-600 text-sm">No categories available.</p>
               ) : (
-                filteredItems.map(item => (
-                  <div
-                    key={item._id}
-                    className="bg-white rounded-lg shadow-md p-2 flex flex-col hover:scale-105 hover:shadow-xl transition-transform duration-200"
-                  >
-                    <img
-                      src={
-                        item.image
-                          ? `${process.env.REACT_APP_API_URL}${item.image}`
-                          : 'https://source.unsplash.com/100x100/?food'
-                      }
-                      alt={item.name}
-                      className="w-full h-20 object-cover rounded-md mb-2"
-                    />
-                    <div className="flex-1">
-                      <h2 className="text-sm font-semibold text-gray-800 truncate">{item.name}</h2>
-                      <p className="text-xs text-gray-600 line-clamp-2">{item.description}</p>
-                      <p className="text-gray-700 font-bold mt-1 sm:mt-2 flex items-center text-xs sm:text-sm">
-                        <FaRupeeSign className="mr-1" />{item.price.toFixed(2)}
-                      </p>
-                      <button
-                        className={`mt-2 sm:mt-3 w-full text-white px-2 sm:px-4 py-1 sm:py-2 rounded-lg transition-colors flex items-center justify-center text-xs sm:text-sm ${
-                          item.isAvailable
-                            ? 'hover:bg-green-600 focus:ring-2 focus:ring-green-400'
-                            : 'bg-red-500 hover:bg-red-600 cursor-not-allowed'
-                        } ${addedItemId === item._id ? 'animate-pulse' : ''}`}
-                        style={{ backgroundColor: item.isAvailable ? '#16a34a' : '#ef4444' }}
-                        onClick={() => addToCart(item)}
-                        disabled={!item.isAvailable}
-                      >
-                        {item.isAvailable ? (
-                          <>
-                            <FaShoppingCart className="mr-1 sm:mr-2" /> 
-                            {addedItemId === item._id ? 'Added!' : 'Add to Cart'}
-                          </>
-                        ) : (
-                          'Sold Out'
-                        )}
-                      </button>
-                    </div>
-                  </div>
-                ))
+                <div className="flex overflow-x-auto space-x-1 sm:space-x-2 pb-2">
+                  {categories.map(category => (
+                    <button
+                      key={category.name}
+                      className={`flex items-center px-3 sm:px-4 py-1 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
+                        selectedCategory === category.name
+                          ? 'shadow-md hover:bg-amber-700'
+                          : 'hover:bg-amber-300'
+                      }`}
+                      style={{
+                        backgroundColor: selectedCategory === category.name ? '#b45309' : '#fed7aa',
+                        color: selectedCategory === category.name ? '#ffffff' : '#1f2937'
+                      }}
+                      onClick={() => setSelectedCategory(category.name)}
+                    >
+                      <span className="mr-1 sm:mr-2">{category.icon}</span>
+                      {category.name}
+                    </button>
+                  ))}
+                </div>
               )}
             </div>
-          </div>
-        </>
+
+            {/* Menu Items */}
+            <div className="container mx-auto p-2 sm:p-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
+                {filteredItems.length === 0 ? (
+                  <p className="text-center col-span-full text-gray-600 text-sm">
+                    No items available.
+                  </p>
+                ) : (
+                  filteredItems.map(item => (
+                    <div
+                      key={item._id}
+                      className="bg-white rounded-lg shadow-md p-2 flex flex-col hover:scale-105 hover:shadow-xl transition-transform duration-200"
+                    >
+                      <img
+                        src={
+                          item.image
+                            ? `${process.env.REACT_APP_API_URL}${item.image}`
+                            : 'https://source.unsplash.com/100x100/?food'
+                        }
+                        alt={item.name}
+                        className="w-full h-20 object-cover rounded-md mb-2"
+                      />
+                      <div className="flex-1">
+                        <h2 className="text-sm font-semibold text-gray-800 truncate">{item.name}</h2>
+                        <p className="text-xs text-gray-600 line-clamp-2">{item.description}</p>
+                        <p className="text-gray-700 font-bold mt-1 sm:mt-2 flex items-center text-xs sm:text-sm">
+                          <FaRupeeSign className="mr-1" />{item.price.toFixed(2)}
+                        </p>
+                        <button
+                          className={`mt-2 sm:mt-3 w-full text-white px-2 sm:px-4 py-1 sm:py-2 rounded-lg transition-colors flex items-center justify-center text-xs sm:text-sm ${
+                            item.isAvailable && sessionToken
+                              ? 'hover:bg-green-600 focus:ring-2 focus:ring-green-400'
+                              : 'bg-red-500 hover:bg-red-600 cursor-not-allowed'
+                          } ${addedItemId === item._id ? 'animate-pulse' : ''}`}
+                          style={{ backgroundColor: item.isAvailable && sessionToken ? '#16a34a' : '#ef4444' }}
+                          onClick={() => addToCart(item)}
+                          disabled={!item.isAvailable || !sessionToken}
+                        >
+                          {item.isAvailable && sessionToken ? (
+                            <>
+                              <FaShoppingCart className="mr-1 sm:mr-2" /> 
+                              {addedItemId === item._id ? 'Added!' : 'Add to Cart'}
+                            </>
+                          ) : (
+                            sessionToken ? 'Sold Out' : 'Session Error'
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
+            </div>
+          </>
+        )
       )}
 
       {/* Persistent Mini-Cart */}
@@ -391,9 +454,9 @@ function Menu() {
                   </p>
                   <button
                     className="w-full sm:w-auto px-4 sm:px-6 py-1 sm:py-2 rounded-lg text-white transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center text-xs sm:text-sm"
-                    style={{ backgroundColor: cart.length === 0 ? '#9ca3af' : '#b45309' }}
+                    style={{ backgroundColor: cart.length === 0 || !sessionToken ? '#9ca3af' : '#b45309' }}
                     onClick={placeOrder}
-                    disabled={cart.length === 0}
+                    disabled={cart.length === 0 || !sessionToken}
                   >
                     <FaUtensils className="mr-1 sm:mr-2" /> Order Now
                   </button>
