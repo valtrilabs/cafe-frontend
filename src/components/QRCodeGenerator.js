@@ -1,5 +1,5 @@
 import React from 'react';
-import QRCode from 'qrcode.react';
+import {QRCode} from 'qrcode.react';
 
 function QRCodeGenerator() {
   // Define the number of tables (adjust as needed)
