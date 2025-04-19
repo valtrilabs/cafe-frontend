@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useLocation } from 'react-router-dom';
-import { FaShoppingCart, FaUtensils, FaRupeeSign } from 'react-icons/fa';
+import { FaShoppingCart, FaUtensils, FaRupeeSign, FaList } from 'react-icons/fa';
 
 function Menu() {
   const [menuItems, setMenuItems] = useState([]);
@@ -10,9 +10,21 @@ function Menu() {
   const [isMiniCartOpen, setIsMiniCartOpen] = useState(false);
   const [error, setError] = useState(null);
   const [addedItemId, setAddedItemId] = useState(null);
+  const [orderStatus, setOrderStatus] = useState(null); // Track order status
+  const [placedOrder, setPlacedOrder] = useState(null); // Store placed order details
+  const [sessionToken, setSessionToken] = useState(localStorage.getItem('sessionToken')); // Session token for QR scan
 
   const location = useLocation();
   const tableNumber = new URLSearchParams(location.search).get('table') || 'Unknown';
+
+  // Generate a session token on first load (simulating QR scan)
+  useEffect(() => {
+    if (!sessionToken) {
+      const newToken = Math.random().toString(36).substring(2);
+      localStorage.setItem('sessionToken', newToken);
+      setSessionToken(newToken);
+    }
+  }, []);
 
   const fetchMenu = () => {
     axios.get(`${process.env.REACT_APP_API_URL}/api/menu`)
@@ -27,8 +39,32 @@ function Menu() {
       });
   };
 
+  // Check order status for the current table and session
+  const checkOrderStatus = () => {
+    axios.get(`${process.env.REACT_APP_API_URL}/api/orders?tableNumber=${tableNumber}`)
+      .then(res => {
+        const orders = res.data;
+        const latestOrder = orders
+          .filter(o => o.tableNumber === parseInt(tableNumber))
+          .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))[0];
+        if (latestOrder) {
+          setOrderStatus(latestOrder.status);
+          setPlacedOrder(latestOrder);
+        } else {
+          setOrderStatus(null);
+          setPlacedOrder(null);
+        }
+      })
+      .catch(err => {
+        console.error('Error checking order status:', err);
+      });
+  };
+
   useEffect(() => {
     fetchMenu();
+    checkOrderStatus();
+    const interval = setInterval(checkOrderStatus, 10000); // Poll every 10 seconds
+    return () => clearInterval(interval);
   }, []);
 
   const categories = [
@@ -51,6 +87,10 @@ function Menu() {
     : menuItems.filter(item => item.category === selectedCategory);
 
   const addToCart = (item) => {
+    if (orderStatus === 'Prepared' || orderStatus === 'Completed') {
+      setError('Please scan the QR code again to place a new order.');
+      return;
+    }
     try {
       console.log('Adding to cart:', item);
       const existingItem = cart.find(cartItem => cartItem.itemId === item._id);
@@ -103,6 +143,10 @@ function Menu() {
   };
 
   const placeOrder = () => {
+    if (orderStatus === 'Prepared' || orderStatus === 'Completed') {
+      setError('Please scan the QR code again to place a new order.');
+      return;
+    }
     axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, {
       tableNumber: parseInt(tableNumber),
       items: cart.map(item => ({ itemId: item.itemId, quantity: item.quantity }))
@@ -111,6 +155,10 @@ function Menu() {
         alert('Congratulations, Your Order is placed successfully. Please wait 10-15 minutes until we prepare fresh food, just for you.');
         setCart([]);
         setIsMiniCartOpen(false);
+        setPlacedOrder(res.data);
+        setOrderStatus('Pending');
+        localStorage.removeItem('sessionToken'); // Invalidate session after order
+        setSessionToken(null);
         return res.data.orderNumber;
       })
       .catch(err => {
@@ -158,87 +206,120 @@ function Menu() {
         </div>
       )}
 
-      {/* Category Tabs */}
-      <div className="container mx-auto p-2 sm:p-4">
-        {categories.length === 1 ? (
-          <p className="text-center text-gray-600 text-sm">No categories available.</p>
-        ) : (
-          <div className="flex overflow-x-auto space-x-1 sm:space-x-2 pb-2">
-            {categories.map(category => (
-              <button
-                key={category.name}
-                className={`flex items-center px-3 sm:px-4 py-1 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
-                  selectedCategory === category.name
-                    ? 'shadow-md hover:bg-amber-700'
-                    : 'hover:bg-amber-300'
-                }`}
-                style={{
-                  backgroundColor: selectedCategory === category.name ? '#b45309' : '#fed7aa',
-                  color: selectedCategory === category.name ? '#ffffff' : '#1f2937'
-                }}
-                onClick={() => setSelectedCategory(category.name)}
-              >
-                <span className="mr-1 sm:mr-2">{category.icon}</span>
-                {category.name}
-              </button>
+      {/* Order Summary (Pending) */}
+      {orderStatus === 'Pending' && placedOrder && (
+        <div className="container mx-auto p-2 sm:p-4 bg-white rounded-lg shadow-md mb-4">
+          <h2 className="text-lg sm:text-xl font-bold flex items-center mb-2">
+            <FaList className="mr-2" /> Your Order Summary (Order #{placedOrder.orderNumber})
+          </h2>
+          <ul className="space-y-2">
+            {placedOrder.items.map((item, index) => (
+              <li key={index} className="text-gray-600 text-sm flex justify-between">
+                <span>{item.quantity} x {item.itemId ? item.itemId.name : '[Deleted Item]'}</span>
+                <span>(<FaRupeeSign className="inline mr-1" />{(item.quantity * (item.itemId ? item.itemId.price : 0)).toFixed(2)})</span>
+              </li>
             ))}
-          </div>
-        )}
-      </div>
+          </ul>
+          <p className="mt-2 font-bold text-gray-800 flex justify-between">
+            <span>Total:</span>
+            <span><FaRupeeSign className="inline mr-1" />{placedOrder.items.reduce((sum, item) => sum + (item.itemId ? item.quantity * item.itemId.price : 0), 0).toFixed(2)}</span>
+          </p>
+          <p className="text-green-600 mt-2">Status: Pending - Your order is being prepared!</p>
+        </div>
+      )}
 
-      {/* Menu Items */}
-      <div className="container mx-auto p-2 sm:p-4">
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
-          {filteredItems.length === 0 ? (
-            <p className="text-center col-span-full text-gray-600 text-sm">
-              No items available.
-            </p>
+      {/* Order Restriction Message */}
+      {(orderStatus === 'Prepared' || orderStatus === 'Completed') && (
+        <div className="container mx-auto p-2 sm:p-4 text-center text-red-600 bg-white rounded-lg shadow-md">
+          <p>Please scan the QR code again to place a new order.</p>
+        </div>
+      )}
+
+      {/* Category Tabs */}
+      {(!orderStatus || orderStatus === 'Pending') && (
+        <div className="container mx-auto p-2 sm:p-4">
+          {categories.length === 1 ? (
+            <p className="text-center text-gray-600 text-sm">No categories available.</p>
           ) : (
-            filteredItems.map(item => (
-              <div
-                key={item._id}
-                className="bg-white rounded-lg shadow-md p-2 flex flex-col hover:scale-105 hover:shadow-xl transition-transform duration-200"
-              >
-                <img
-                  src={
-                    item.image
-                      ? `${process.env.REACT_APP_API_URL}${item.image}`
-                      : 'https://source.unsplash.com/100x100/?food'
-                  }
-                  alt={item.name}
-                  className="w-full h-20 object-cover rounded-md mb-2"
-                />
-                <div className="flex-1">
-                  <h2 className="text-sm font-semibold text-gray-800 truncate">{item.name}</h2>
-                  <p className="text-xs text-gray-600 line-clamp-2">{item.description}</p>
-                  <p className="text-gray-700 font-bold mt-1 sm:mt-2 flex items-center text-xs sm:text-sm">
-                    <FaRupeeSign className="mr-1" />{item.price.toFixed(2)}
-                  </p>
-                  <button
-                    className={`mt-2 sm:mt-3 w-full text-white px-2 sm:px-4 py-1 sm:py-2 rounded-lg transition-colors flex items-center justify-center text-xs sm:text-sm ${
-                      item.isAvailable
-                        ? 'hover:bg-green-600 focus:ring-2 focus:ring-green-400'
-                        : 'bg-red-500 hover:bg-red-600 cursor-not-allowed'
-                    } ${addedItemId === item._id ? 'animate-pulse' : ''}`}
-                    style={{ backgroundColor: item.isAvailable ? '#16a34a' : '#ef4444' }}
-                    onClick={() => addToCart(item)}
-                    disabled={!item.isAvailable}
-                  >
-                    {item.isAvailable ? (
-                      <>
-                        <FaShoppingCart className="mr-1 sm:mr-2" /> 
-                        {addedItemId === item._id ? 'Added!' : 'Add to Cart'}
-                      </>
-                    ) : (
-                      'Sold Out'
-                    )}
-                  </button>
-                </div>
-              </div>
-            ))
+            <div className="flex overflow-x-auto space-x-1 sm:space-x-2 pb-2">
+              {categories.map(category => (
+                <button
+                  key={category.name}
+                  className={`flex items-center px-3 sm:px-4 py-1 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
+                    selectedCategory === category.name
+                      ? 'shadow-md hover:bg-amber-700'
+                      : 'hover:bg-amber-300'
+                  }`}
+                  style={{
+                    backgroundColor: selectedCategory === category.name ? '#b45309' : '#fed7aa',
+                    color: selectedCategory === category.name ? '#ffffff' : '#1f2937'
+                  }}
+                  onClick={() => setSelectedCategory(category.name)}
+                >
+                  <span className="mr-1 sm:mr-2">{category.icon}</span>
+                  {category.name}
+                </button>
+              ))}
+            </div>
           )}
         </div>
-      </div>
+      )}
+
+      {/* Menu Items */}
+      {(!orderStatus || orderStatus === 'Pending') && (
+        <div className="container mx-auto p-2 sm:p-4">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
+            {filteredItems.length === 0 ? (
+              <p className="text-center col-span-full text-gray-600 text-sm">
+                No items available.
+              </p>
+            ) : (
+              filteredItems.map(item => (
+                <div
+                  key={item._id}
+                  className="bg-white rounded-lg shadow-md p-2 flex flex-col hover:scale-105 hover:shadow-xl transition-transform duration-200"
+                >
+                  <img
+                    src={
+                      item.image
+                        ? `${process.env.REACT_APP_API_URL}${item.image}`
+                        : 'https://source.unsplash.com/100x100/?food'
+                    }
+                    alt={item.name}
+                    className="w-full h-20 object-cover rounded-md mb-2"
+                  />
+                  <div className="flex-1">
+                    <h2 className="text-sm font-semibold text-gray-800 truncate">{item.name}</h2>
+                    <p className="text-xs text-gray-600 line-clamp-2">{item.description}</p>
+                    <p className="text-gray-700 font-bold mt-1 sm:mt-2 flex items-center text-xs sm:text-sm">
+                      <FaRupeeSign className="mr-1" />{item.price.toFixed(2)}
+                    </p>
+                    <button
+                      className={`mt-2 sm:mt-3 w-full text-white px-2 sm:px-4 py-1 sm:py-2 rounded-lg transition-colors flex items-center justify-center text-xs sm:text-sm ${
+                        item.isAvailable
+                          ? 'hover:bg-green-600 focus:ring-2 focus:ring-green-400'
+                          : 'bg-red-500 hover:bg-red-600 cursor-not-allowed'
+                      } ${addedItemId === item._id ? 'animate-pulse' : ''}`}
+                      style={{ backgroundColor: item.isAvailable ? '#16a34a' : '#ef4444' }}
+                      onClick={() => addToCart(item)}
+                      disabled={!item.isAvailable}
+                    >
+                      {item.isAvailable ? (
+                        <>
+                          <FaShoppingCart className="mr-1 sm:mr-2" /> 
+                          {addedItemId === item._id ? 'Added!' : 'Add to Cart'}
+                        </>
+                      ) : (
+                        'Sold Out'
+                      )}
+                    </button>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
 
       {/* Persistent Mini-Cart */}
       {cart.length > 0 || isMiniCartOpen ? (
@@ -314,6 +395,7 @@ function Menu() {
                     Total: <FaRupeeSign className="ml-1 mr-1" />{totalPrice.toFixed(2)}
                   </p>
                   <button
+                    personally identifiable information
                     className="w-full sm:w-auto px-4 sm:px-6 py-1 sm:py-2 rounded-lg text-white transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center text-xs sm:text-sm"
                     style={{ backgroundColor: cart.length === 0 ? '#9ca3af' : '#b45309' }}
                     onClick={placeOrder}

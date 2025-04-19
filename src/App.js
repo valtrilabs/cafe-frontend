@@ -12,6 +12,7 @@ function App() {
         <Route path="/operator" element={<OperatorDashboard />} />
         <Route path="/payment" element={<PaymentDashboard />} />
         <Route path="/qr" element={<QRCodeGenerator />} />
+        <Route path="*" element={<div>404 - Page Not Found</div>} />
       </Routes>
     </Router>
   );

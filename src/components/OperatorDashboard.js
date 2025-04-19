@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { FaPlus, FaEdit, FaTrash, FaCheck, FaTimes, FaChartBar, FaUtensils, FaList, FaClock, FaHamburger, FaArrowUp, FaArrowDown, FaRupeeSign } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaCheck, FaTimes, FaChartBar, FaUtensils, FaList, FaClock, FaHamburger, FaArrowUp, FaArrowDown, FaRupeeSign, FaSearch } from 'react-icons/fa';
 
 function OperatorDashboard() {
   const [orders, setOrders] = useState([]);
@@ -26,6 +26,25 @@ function OperatorDashboard() {
     peakHours: [],
     categories: []
   });
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [password, setPassword] = useState('');
+  const [manualOrder, setManualOrder] = useState({
+    tableNumber: '',
+    items: [],
+    searchQuery: ''
+  });
+
+  const STATIC_PASSWORD = 'Gsaheb2025';
+
+  const handleLogin = (e) => {
+    e.preventDefault();
+    if (password === STATIC_PASSWORD) {
+      setIsAuthenticated(true);
+      setError(null);
+    } else {
+      setError('Incorrect password.');
+    }
+  };
 
   const fetchOrders = (tab) => {
     const now = new Date();
@@ -92,15 +111,17 @@ function OperatorDashboard() {
   };
 
   useEffect(() => {
-    fetchOrders('Today');
-    fetchMenuItems();
-    fetchAnalytics();
-    const interval = setInterval(() => {
-      fetchOrders(activeTab === 'Today' ? 'Today' : activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
-      if (activeTab === 'Analytics') fetchAnalytics();
-    }, 30000);
-    return () => clearInterval(interval);
-  }, [activeTab]);
+    if (isAuthenticated) {
+      fetchOrders('Today');
+      fetchMenuItems();
+      fetchAnalytics();
+      const interval = setInterval(() => {
+        fetchOrders(activeTab === 'Today' ? 'Today' : activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
+        if (activeTab === 'Analytics') fetchAnalytics();
+      }, 30000);
+      return () => clearInterval(interval);
+    }
+  }, [activeTab, isAuthenticated]);
 
   const handleStatusUpdate = (orderId, status) => {
     axios.put(`${process.env.REACT_APP_API_URL}/api/orders/${orderId}`, { status })
@@ -219,11 +240,92 @@ function OperatorDashboard() {
       });
   };
 
+  const handleAddToManualOrder = (item) => {
+    const existingItem = manualOrder.items.find(i => i.itemId === item._id);
+    if (existingItem) {
+      setManualOrder({
+        ...manualOrder,
+        items: manualOrder.items.map(i =>
+          i.itemId === item._id ? { ...i, quantity: i.quantity + 1 } : i
+        )
+      });
+    } else {
+      setManualOrder({
+        ...manualOrder,
+        items: [
+          ...manualOrder.items,
+          { itemId: item._id, name: item.name, price: item.price, quantity: 1 }
+        ]
+      });
+    }
+  };
+
+  const handleRemoveFromManualOrder = (itemId) => {
+    setManualOrder({
+      ...manualOrder,
+      items: manualOrder.items.filter(i => i.itemId !== itemId)
+    });
+  };
+
+  const handlePlaceManualOrder = () => {
+    if (!manualOrder.tableNumber || manualOrder.items.length === 0) {
+      setError('Please enter a table number and add at least one item.');
+      return;
+    }
+    axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, {
+      tableNumber: parseInt(manualOrder.tableNumber),
+      items: manualOrder.items.map(item => ({ itemId: item.itemId, quantity: item.quantity }))
+    })
+      .then(() => {
+        fetchOrders(activeTab === 'Today' ? 'Today' : activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
+        setManualOrder({ tableNumber: '', items: [], searchQuery: '' });
+        setError(null);
+      })
+      .catch(err => {
+        console.error('Error placing manual order:', err);
+        setError('Failed to place manual order.');
+      });
+  };
+
   const filteredOrders = orders.filter(order => 
     activeTab === 'Past Orders' || activeTab === 'Today' ? true : order.status === activeTab
   );
 
+  const filteredMenuItems = menuItems.filter(item =>
+    item.name.toLowerCase().includes(manualOrder.searchQuery.toLowerCase())
+  );
+
   const COLORS = ['#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#8b5cf6'];
+
+  if (!isAuthenticated) {
+    return (
+      <div className="min-h-screen bg-orange-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg shadow-md p-6 w-full max-w-md">
+          <h1 className="text-2xl font-bold mb-4 text-center">Operator Dashboard Login</h1>
+          <form onSubmit={handleLogin} className="space-y-4">
+            <div>
+              <label className="block text-gray-700 text-sm font-medium">Password</label>
+              <input
+                type="password"
+                value={password}
+                onChange={e => setPassword(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500"
+                required
+              />
+            </div>
+            {error && <p className="text-red-600 text-sm">{error}</p>}
+            <button
+              type="submit"
+              className="w-full px-4 py-2 rounded-lg text-white"
+              style={{ backgroundColor: '#b45309' }}
+            >
+              Login
+            </button>
+          </form>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-orange-50 p-4 sm:p-6">
@@ -244,6 +346,7 @@ function OperatorDashboard() {
           { name: 'Completed', icon: <FaCheck /> },
           { name: 'Past Orders', icon: <FaList /> },
           { name: 'Menu Management', icon: <FaHamburger /> },
+          { name: 'Manual Order', icon: <FaPlus /> },
           { name: 'Analytics', icon: <FaChartBar /> },
         ].map(tab => (
           <button
@@ -261,6 +364,122 @@ function OperatorDashboard() {
           </button>
         ))}
       </div>
+
+      {/* Manual Order Tab */}
+      {activeTab === 'Manual Order' && (
+        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+          <h2 className="text-xl sm:text-2xl font-semibold mb-4 flex items-center">
+            <FaPlus className="mr-2" style={{ color: '#b45309' }} /> Place Manual Order
+          </h2>
+          <div className="space-y-4">
+            <div>
+              <label className="block text-gray-700 text-sm font-medium">Table Number</label>
+              <input
+                type="number"
+                value={manualOrder.tableNumber}
+                onChange={e => setManualOrder({ ...manualOrder, tableNumber: e.target.value })}
+                className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500"
+                required
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 text-sm font-medium">Search Menu Items</label>
+              <div className="relative">
+                <FaSearch className="absolute left-3 top-3 text-gray-400" />
+                <input
+                  type="text"
+                  value={manualOrder.searchQuery}
+                  onChange={e => setManualOrder({ ...manualOrder, searchQuery: e.target.value })}
+                  placeholder="Search items..."
+                  className="w-full border rounded-lg pl-10 pr-3 py-2 focus:ring-2 focus:ring-amber-500"
+                />
+              </div>
+            </div>
+            <div className="max-h-60 overflow-y-auto">
+              {filteredMenuItems.length === 0 ? (
+                <p className="text-gray-600">No items found.</p>
+              ) : (
+                filteredMenuItems.map(item => (
+                  <div
+                    key={item._id}
+                    className="flex justify-between items-center p-2 border-b"
+                  >
+                    <div>
+                      <p className="text-gray-800 font-medium">{item.name}</p>
+                      <p className="text-gray-600 text-sm">
+                        {item.category} | <FaRupeeSign className="inline mr-1" />{item.price.toFixed(2)}
+                      </p>
+                    </div>
+                    <button
+                      className="px-3 py-1 rounded-lg text-white text-sm"
+                      style={{ backgroundColor: '#16a34a' }}
+                      onClick={() => handleAddToManualOrder(item)}
+                    >
+                      Add
+                    </button>
+                  </div>
+                ))
+              )}
+            </div>
+            <div>
+              <h3 className="text-lg font-medium mb-2">Selected Items</h3>
+              {manualOrder.items.length === 0 ? (
+                <p className="text-gray-600">No items selected.</p>
+              ) : (
+                <div className="space-y-2">
+                  {manualOrder.items.map(item => (
+                    <div key={item.itemId} className="flex justify-between items-center border-b py-2">
+                      <div>
+                        <p className="text-gray-800">{item.name}</p>
+                        <p className="text-gray-600 text-sm">
+                          {item.quantity} x <FaRupeeSign className="inline mr-1" />{item.price.toFixed(2)}
+                        </p>
+                      </div>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          className="px-2 py-1 bg-gray-200 rounded"
+                          onClick={() => setManualOrder({
+                            ...manualOrder,
+                            items: manualOrder.items.map(i =>
+                              i.itemId === item.itemId ? { ...i, quantity: Math.max(1, i.quantity - 1) } : i
+                            )
+                          })}
+                        >
+                          -
+                        </button>
+                        <button
+                          className="px-2 py-1 bg-gray-200 rounded"
+                          onClick={() => setManualOrder({
+                            ...manualOrder,
+                            items: manualOrder.items.map(i =>
+                              i.itemId === item.itemId ? { ...i, quantity: i.quantity + 1 } : i
+                            )
+                          })}
+                        >
+                          +
+                        </button>
+                        <button
+                          className="text-red-600 hover:text-red-800 text-sm"
+                          onClick={() => handleRemoveFromManualOrder(item.itemId)}
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <button
+              className="w-full px-4 py-2 rounded-lg text-white flex items-center justify-center"
+              style={{ backgroundColor: '#b45309' }}
+              onClick={handlePlaceManualOrder}
+            >
+              <FaCheck className="mr-2" /> Place Order
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Analytics Tab */}
       {activeTab === 'Analytics' && (
