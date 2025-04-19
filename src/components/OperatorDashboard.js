@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FaUtensils, FaCheck, FaTimes, FaClock, FaTable } from 'react-icons/fa';
+import { FaUtensils, FaCheck, FaTimes, FaClock, FaTable, FaRupeeSign} from 'react-icons/fa';
 
 function OperatorDashboard() {
   const [orders, setOrders] = useState([]);
