@@ -162,7 +162,10 @@ function Menu() {
       })
       .catch(err => {
         console.error('Error placing order:', err.response ? err.response.data : err.message);
-        setError(`Failed to place order: ${err.response ? err.response.data.error : 'Unknown error'} - ${err.response ? err.response.data.details : ''}`);
+        const errorMessage = err.response && err.response.data.error
+          ? `Failed to place order: ${err.response.data.error}`
+          : 'Failed to place order: Unknown error';
+        setError(errorMessage);
       });
   };
 
