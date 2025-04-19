@@ -48,7 +48,7 @@ function Menu() {
         setMenuItems(res.data.filter(item => item.isAvailable));
       })
       .catch(err => {
-        console.error('Error fetching menu:', err);
+        console.error('Error fetching menu:', err.message);
         setError('Failed to load menu. Please try again.');
       });
 
@@ -58,7 +58,7 @@ function Menu() {
         setOrders(res.data);
       })
       .catch(err => {
-        console.error('Error fetching orders:', err);
+        console.error('Error fetching orders:', err.message);
         setError('Failed to load orders. Please try again.');
       });
 
@@ -80,7 +80,7 @@ function Menu() {
           setOrders(res.data);
         })
         .catch(err => {
-          console.error('Error polling orders:', err);
+          console.error('Error polling orders:', err.message);
         });
     }, 10000);
 
@@ -138,7 +138,7 @@ function Menu() {
       })
       .catch(err => {
         console.error('Error placing order:', err.response ? err.response.data : err.message);
-        setError('Failed to place order. Please try again.');
+        setError(`Failed to place order: ${err.response ? err.response.data.error : 'Unknown error'}`);
       });
   };
 
@@ -151,6 +151,7 @@ function Menu() {
     acc[category].push(item);
     return acc;
   }, {});
+  console.log('Grouped menu:', groupedMenu);
 
   const hasActiveOrder = orders.length > 0 && orders.some(order => ['Prepared', 'Completed'].includes(order.status));
   console.log('Has active order:', hasActiveOrder, 'Orders:', orders);
