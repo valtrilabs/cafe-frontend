@@ -1,5 +1,5 @@
 import React from 'react';
-import {QRCode} from 'qrcode.react';
+import { QRCodeSVG } from 'qrcode.react';
 
 function QRCodeGenerator() {
   // Define the number of tables (adjust as needed)
@@ -28,13 +28,12 @@ function QRCodeGenerator() {
               <h2 className="text-lg font-semibold text-gray-800 mb-2">
                 Table {tableNumber}
               </h2>
-              <QRCode
+              <QRCodeSVG
                 value={qrUrl}
                 size={150}
                 bgColor="#ffffff"
                 fgColor="#000000"
                 level="H"
-                renderAs="svg"
               />
               <p className="text-sm text-gray-600 mt-2">Scan for Table {tableNumber}</p>
               <a
