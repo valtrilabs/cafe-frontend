@@ -11,6 +11,7 @@ function App() {
       <Routes>
         <Route path="/" element={<Menu />} />
         <Route path="/order" element={<Menu />} />
+        <Route path="/menu" element={<Menu />} />
         <Route path="/operator" element={<OperatorDashboard />} />
         <Route path="/payment" element={<PaymentDashboard />} />
         <Route path="/qr" element={<QRCodeGenerator />} />
