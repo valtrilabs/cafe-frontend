@@ -212,11 +212,20 @@ function Menu() {
       )}
 
       {/* Menu Items Grouped by Category */}
-      {Object.keys(groupedMenu).length > 0 ? (
-        <>
-          {Object.entries(groupedMenu).map(([category, items]) => (
-            <div key={category} className="mb-8">
-              <h2 className="text-2xl font-semibold mb-4 text-gray-800" style={{ color: '#b45309' }}>
+      <div className="menu-container">
+        {Object.keys(groupedMenu).length > 0 ? (
+          Object.entries(groupedMenu).map(([category, items]) => (
+            <div key={category} className="category-section mb-8">
+              <h2
+                className="text-2xl font-semibold mb-4"
+                style={{
+                  color: '#b45309',
+                  fontSize: '1.5rem',
+                  fontWeight: 'bold',
+                  display: 'block',
+                  marginBottom: '1rem'
+                }}
+              >
                 {category}
               </h2>
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
@@ -256,11 +265,11 @@ function Menu() {
                 ))}
               </div>
             </div>
-          ))}
-        </>
-      ) : (
-        <p className="text-gray-600 text-center">No menu items available.</p>
-      )}
+          ))
+        ) : (
+          <p className="text-gray-600 text-center">No menu items available.</p>
+        )}
+      </div>
 
       {Object.keys(cart).length > 0 && (
         <div className="fixed bottom-0 left-0 right-0 bg-white p-4 shadow-md">
