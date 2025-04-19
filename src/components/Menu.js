@@ -31,6 +31,9 @@ function Menu() {
         console.log('Session initialized:', res.data);
         setSessionToken(res.data.token);
         setError(null);
+        setOrderStatus(null); // Reset order status
+        setCart([]); // Clear cart
+        setIsMiniCartOpen(false); // Hide mini-cart
         checkOrderStatus();
       })
       .catch(err => {
@@ -56,8 +59,8 @@ function Menu() {
           errorMsg += err.message;
         }
         setError(errorMsg);
-      })
-      .finally(() => setIsLoading(false));
+        setIsLoading(false);
+      });
   };
 
   const fetchMenu = () => {
@@ -82,13 +85,23 @@ function Menu() {
       .then(res => {
         if (res.data) {
           console.log('Latest order status:', res.data);
-          setOrderStatus(res.data.status);
           setLatestOrder(res.data);
-          if (res.data.status === 'Prepared' || res.data.status === 'Completed') {
-            setSessionToken(null); // Clear sessionToken to prevent ordering
-            setCart([]); // Clear cart
-            setIsMiniCartOpen(false); // Hide mini-cart
+          setOrderStatus(res.data.status);
+          // Only block if the latest order is Pending
+          if (res.data.status === 'Pending') {
+            setSessionToken(null);
+            setCart([]);
+            setIsMiniCartOpen(false);
+            setError('An order is currently pending. Please wait until it is prepared or completed.');
+          } else {
+            // Allow new order for Prepared or Completed
+            setError(null);
           }
+        } else {
+          // No orders exist, allow new order
+          setOrderStatus(null);
+          setLatestOrder(null);
+          setError(null);
         }
       })
       .catch(err => {
@@ -99,25 +112,36 @@ function Menu() {
         });
         if (err.response?.status !== 404) {
           setError('Failed to check order status.');
+        } else {
+          setOrderStatus(null);
+          setLatestOrder(null);
+          setError(null);
         }
-      });
+      })
+      .finally(() => setIsLoading(false));
   };
 
   useEffect(() => {
     setIsLoading(true);
+    setOrderStatus(null); // Reset on page load
+    setSessionToken(null); // Reset on page load
+    setCart([]); // Clear cart on page load
+    setIsMiniCartOpen(false); // Hide mini-cart on page load
     fetchMenu();
     initializeSession();
   }, [tableNumber]);
 
   const retrySession = () => {
-    if (orderStatus === 'Prepared' || orderStatus === 'Completed') {
-      setError('Please scan the QR code again to place a new order.');
+    if (orderStatus === 'Pending') {
+      setError('An order is currently pending. Please wait until it is prepared or completed.');
       return;
     }
     setError(null);
     setCart([]);
     setIsMiniCartOpen(false);
     setIsLoading(true);
+    setOrderStatus(null); // Reset order status
+    setSessionToken(null); // Reset session token
     initializeSession();
   };
 
@@ -145,8 +169,8 @@ function Menu() {
       setError('Cannot add items. Session not initialized. Please scan the QR code.');
       return;
     }
-    if (orderStatus === 'Prepared' || orderStatus === 'Completed') {
-      setError('Cannot add items. Your previous order is already prepared or completed. Please scan the QR code again.');
+    if (orderStatus === 'Pending') {
+      setError('Cannot add items. An order is currently pending. Please wait until it is prepared or completed.');
       return;
     }
     try {
@@ -206,8 +230,8 @@ function Menu() {
       setError('Cart is empty or session is invalid. Please scan the QR code.');
       return;
     }
-    if (orderStatus === 'Prepared' || orderStatus === 'Completed') {
-      setError('Cannot place order. Your previous order is already prepared or completed. Please scan the QR code again.');
+    if (orderStatus === 'Pending') {
+      setError('Cannot place order. An order is currently pending. Please wait until it is prepared or completed.');
       return;
     }
     axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, {
@@ -223,7 +247,6 @@ function Menu() {
         setOrderStatus('Pending');
         checkOrderStatus();
         setError(null);
-        return res.data.orderNumber;
       })
       .catch(err => {
         console.error('Error placing order:', {
@@ -275,7 +298,7 @@ function Menu() {
       {error && !isLoading && (
         <div className="container mx-auto p-2 sm:p-4 text-center text-red-600">
           <p>{error}</p>
-          {(orderStatus !== 'Prepared' && orderStatus !== 'Completed') && (
+          {orderStatus !== 'Pending' && (
             <button
               className="mt-2 px-3 sm:px-4 py-1 sm:py-2 rounded-lg text-white text-sm"
               style={{ backgroundColor: '#b45309' }}
@@ -288,11 +311,11 @@ function Menu() {
       )}
 
       {/* Order Status or Menu */}
-      {orderStatus === 'Prepared' || orderStatus === 'Completed' ? (
+      {orderStatus === 'Pending' ? (
         <div className="container mx-auto p-2 sm:p-4">
           <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 text-center">
             <p className="text-lg text-gray-700">
-              Your order is {orderStatus.toLowerCase()}. Please scan the QR code again to place a new order.
+              An order is currently pending. Please wait until it is prepared or completed.
             </p>
             <button
               className="mt-4 px-4 py-2 rounded-lg text-white flex items-center mx-auto"
@@ -488,7 +511,7 @@ function Menu() {
               <FaHistory className="mr-2" style={{ color: '#b45309' }} /> Order Summary
             </h2>
             <p className="text-sm text-gray-600">
-              Order #{latestOrder.orderNumber} - {latestOrder.status}
+              Order #{latestOrder.orderNumber || 'N/A'} - {latestOrder.status}
             </p>
             <ul className="mt-2 space-y-2">
               {latestOrder.items.map((item, index) => (
