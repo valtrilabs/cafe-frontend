@@ -138,7 +138,7 @@ function Menu() {
       })
       .catch(err => {
         console.error('Error placing order:', err.response ? err.response.data : err.message);
-        setError(`Failed to place order: ${err.response ? err.response.data.error : 'Unknown error'}`);
+        setError(`Failed to place order: ${err.response ? err.response.data.error : 'Unknown error'} - ${err.response ? err.response.data.details : ''}`);
       });
   };
 
@@ -152,6 +152,9 @@ function Menu() {
     return acc;
   }, {});
   console.log('Grouped menu:', groupedMenu);
+
+  // Debug rendering
+  console.log('Rendering categories:', Object.keys(groupedMenu));
 
   const hasActiveOrder = orders.length > 0 && orders.some(order => ['Prepared', 'Completed'].includes(order.status));
   console.log('Has active order:', hasActiveOrder, 'Orders:', orders);
@@ -210,47 +213,51 @@ function Menu() {
 
       {/* Menu Items Grouped by Category */}
       {Object.keys(groupedMenu).length > 0 ? (
-        Object.entries(groupedMenu).map(([category, items]) => (
-          <div key={category} className="mb-8">
-            <h2 className="text-xl sm:text-2xl font-semibold mb-4 text-gray-800">{category}</h2>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-              {items.map(item => (
-                <div key={item._id} className="bg-white rounded-lg shadow-md p-4 flex flex-col">
-                  {item.image && (
-                    <img
-                      src={`${process.env.REACT_APP_API_URL}${item.image}`}
-                      alt={item.name}
-                      className="w-full h-32 object-cover rounded-lg mb-2"
-                    />
-                  )}
-                  <h3 className="text-lg sm:text-xl font-semibold">{item.name}</h3>
-                  <p className="text-gray-600 text-sm">{item.description}</p>
-                  <p className="text-gray-800 font-bold flex items-center mt-2">
-                    <FaRupeeSign className="mr-1" />{item.price.toFixed(2)}
-                  </p>
-                  <div className="flex items-center mt-4">
-                    <button
-                      className="px-2 py-1 rounded-lg"
-                      style={{ backgroundColor: '#b45309', color: '#ffffff' }}
-                      onClick={() => removeFromCart(item._id)}
-                      disabled={!cart[item._id]}
-                    >
-                      <FaMinus />
-                    </button>
-                    <span className="mx-2">{cart[item._id] || 0}</span>
-                    <button
-                      className="px-2 py-1 rounded-lg"
-                      style={{ backgroundColor: '#b45309', color: '#ffffff' }}
-                      onClick={() => addToCart(item._id)}
-                    >
-                      <FaPlus />
-                    </button>
+        <>
+          {Object.entries(groupedMenu).map(([category, items]) => (
+            <div key={category} className="mb-8">
+              <h2 className="text-2xl font-semibold mb-4 text-gray-800" style={{ color: '#b45309' }}>
+                {category}
+              </h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                {items.map(item => (
+                  <div key={item._id} className="bg-white rounded-lg shadow-md p-4 flex flex-col">
+                    {item.image && (
+                      <img
+                        src={`${process.env.REACT_APP_API_URL}${item.image}`}
+                        alt={item.name}
+                        className="w-full h-32 object-cover rounded-lg mb-2"
+                      />
+                    )}
+                    <h3 className="text-lg sm:text-xl font-semibold">{item.name}</h3>
+                    <p className="text-gray-600 text-sm">{item.description}</p>
+                    <p className="text-gray-800 font-bold flex items-center mt-2">
+                      <FaRupeeSign className="mr-1" />{item.price.toFixed(2)}
+                    </p>
+                    <div className="flex items-center mt-4">
+                      <button
+                        className="px-2 py-1 rounded-lg"
+                        style={{ backgroundColor: '#b45309', color: '#ffffff' }}
+                        onClick={() => removeFromCart(item._id)}
+                        disabled={!cart[item._id]}
+                      >
+                        <FaMinus />
+                      </button>
+                      <span className="mx-2">{cart[item._id] || 0}</span>
+                      <button
+                        className="px-2 py-1 rounded-lg"
+                        style={{ backgroundColor: '#b45309', color: '#ffffff' }}
+                        onClick={() => addToCart(item._id)}
+                      >
+                        <FaPlus />
+                      </button>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
-          </div>
-        ))
+          ))}
+        </>
       ) : (
         <p className="text-gray-600 text-center">No menu items available.</p>
       )}
