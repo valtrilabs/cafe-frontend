@@ -4,7 +4,6 @@ import { useLocation } from 'react-router-dom';
 import { FaUtensils, FaPlus, FaMinus, FaShoppingCart, FaRupeeSign, FaClock } from 'react-icons/fa';
 
 function Menu() {
-  // State to store menu items, cart, orders, loading status, and errors
   const [menuItems, setMenuItems] = useState([]);
   const [cart, setCart] = useState({});
   const [orders, setOrders] = useState([]);
@@ -12,15 +11,12 @@ function Menu() {
   const [error, setError] = useState(null);
   const [orderSuccess, setOrderSuccess] = useState(null);
 
-  // Get table number from URL (e.g., /order?table=1)
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
   const tableNumber = queryParams.get('table');
 
-  // Manage session token to track QR code scans
   const [sessionToken, setSessionToken] = useState(localStorage.getItem('sessionToken'));
 
-  // Generate a new session token if none exists
   useEffect(() => {
     if (!sessionToken) {
       const newToken = Math.random().toString(36).substring(2);
@@ -30,15 +26,13 @@ function Menu() {
     }
   }, [sessionToken]);
 
-  // Fetch menu items and orders when component loads or tableNumber/sessionToken changes
   useEffect(() => {
-    if (!tableNumber || !sessionToken) {
+    if (!tableNumber) {
       setError('Please scan a valid QR code.');
       setLoading(false);
       return;
     }
 
-    // Validate tableNumber
     const parsedTableNumber = parseInt(tableNumber);
     if (isNaN(parsedTableNumber) || parsedTableNumber < 1) {
       setError('Invalid table number. Please scan a valid QR code.');
@@ -48,7 +42,6 @@ function Menu() {
 
     console.log('Fetching data for tableNumber:', parsedTableNumber, 'sessionToken:', sessionToken);
 
-    // Fetch menu items
     const fetchMenu = axios.get(`${process.env.REACT_APP_API_URL}/api/menu`)
       .then(res => {
         console.log('Menu items fetched:', res.data);
@@ -59,7 +52,6 @@ function Menu() {
         setError('Failed to load menu. Please try again.');
       });
 
-    // Fetch orders for the table
     const fetchOrders = axios.get(`${process.env.REACT_APP_API_URL}/api/orders?tableNumber=${parsedTableNumber}`)
       .then(res => {
         console.log('Orders fetched:', res.data);
@@ -70,13 +62,11 @@ function Menu() {
         setError('Failed to load orders. Please try again.');
       });
 
-    // Wait for both requests to complete
     Promise.all([fetchMenu, fetchOrders]).then(() => {
       setLoading(false);
     });
   }, [tableNumber, sessionToken]);
 
-  // Poll orders every 10 seconds to check status
   useEffect(() => {
     if (!tableNumber || !sessionToken) return;
 
@@ -97,7 +87,6 @@ function Menu() {
     return () => clearInterval(interval);
   }, [tableNumber, sessionToken]);
 
-  // Add item to cart
   const addToCart = (itemId) => {
     setCart(prev => ({
       ...prev,
@@ -105,7 +94,6 @@ function Menu() {
     }));
   };
 
-  // Remove item from cart
   const removeFromCart = (itemId) => {
     setCart(prev => {
       const newCart = { ...prev };
@@ -118,7 +106,6 @@ function Menu() {
     });
   };
 
-  // Place order
   const placeOrder = () => {
     if (Object.keys(cart).length === 0) {
       setError('Your cart is empty.');
@@ -136,27 +123,36 @@ function Menu() {
       quantity
     }));
 
-    console.log('Placing order:', { tableNumber: parsedTableNumber, items });
+    console.log('Placing order with data:', { tableNumber: parsedTableNumber, items });
 
     axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, {
       tableNumber: parsedTableNumber,
       items
     })
       .then(res => {
-        console.log('Order placed:', res.data);
+        console.log('Order placed successfully:', res.data);
         setOrderSuccess(`Order #${res.data.orderNumber} placed successfully!`);
         setCart({});
         setError(null);
         setOrders(prev => [res.data, ...prev]);
       })
       .catch(err => {
-        console.error('Error placing order:', err);
+        console.error('Error placing order:', err.response ? err.response.data : err.message);
         setError('Failed to place order. Please try again.');
       });
   };
 
-  // Check if ordering is allowed
-  const hasActiveOrder = orders.some(order => ['Prepared', 'Completed'].includes(order.status));
+  // Group menu items by category
+  const groupedMenu = menuItems.reduce((acc, item) => {
+    const category = item.category || 'Uncategorized';
+    if (!acc[category]) {
+      acc[category] = [];
+    }
+    acc[category].push(item);
+    return acc;
+  }, {});
+
+  const hasActiveOrder = orders.length > 0 && orders.some(order => ['Prepared', 'Completed'].includes(order.status));
   console.log('Has active order:', hasActiveOrder, 'Orders:', orders);
 
   if (loading) {
@@ -191,7 +187,7 @@ function Menu() {
             An order for Table {tableNumber} is already being prepared or completed.
           </p>
           <p className="text-gray-600">
-            Please scan the QR code again to place a new order.
+            Please scan the QR code again after the current order is cleared.
           </p>
         </div>
       </div>
@@ -211,46 +207,53 @@ function Menu() {
         <p className="text-red-600 text-center mb-4">{error}</p>
       )}
 
-      {/* Menu Items */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-        {menuItems.map(item => (
-          <div key={item._id} className="bg-white rounded-lg shadow-md p-4 flex flex-col">
-            {item.image && (
-              <img
-                src={`${process.env.REACT_APP_API_URL}${item.image}`}
-                alt={item.name}
-                className="w-full h-32 object-cover rounded-lg mb-2"
-              />
-            )}
-            <h2 className="text-lg sm:text-xl font-semibold">{item.name}</h2>
-            <p className="text-gray-600 text-sm">{item.category}</p>
-            <p className="text-gray-600 text-sm">{item.description}</p>
-            <p className="text-gray-800 font-bold flex items-center mt-2">
-              <FaRupeeSign className="mr-1" />{item.price.toFixed(2)}
-            </p>
-            <div className="flex items-center mt-4">
-              <button
-                className="px-2 py-1 rounded-lg"
-                style={{ backgroundColor: '#b45309', color: '#ffffff' }}
-                onClick={() => removeFromCart(item._id)}
-                disabled={!cart[item._id]}
-              >
-                <FaMinus />
-              </button>
-              <span className="mx-2">{cart[item._id] || 0}</span>
-              <button
-                className="px-2 py-1 rounded-lg"
-                style={{ backgroundColor: '#b45309', color: '#ffffff' }}
-                onClick={() => addToCart(item._id)}
-              >
-                <FaPlus />
-              </button>
+      {/* Menu Items Grouped by Category */}
+      {Object.keys(groupedMenu).length > 0 ? (
+        Object.entries(groupedMenu).map(([category, items]) => (
+          <div key={category} className="mb-8">
+            <h2 className="text-xl sm:text-2xl font-semibold mb-4 text-gray-800">{category}</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+              {items.map(item => (
+                <div key={item._id} className="bg-white rounded-lg shadow-md p-4 flex flex-col">
+                  {item.image && (
+                    <img
+                      src={`${process.env.REACT_APP_API_URL}${item.image}`}
+                      alt={item.name}
+                      className="w-full h-32 object-cover rounded-lg mb-2"
+                    />
+                  )}
+                  <h3 className="text-lg sm:text-xl font-semibold">{item.name}</h3>
+                  <p className="text-gray-600 text-sm">{item.description}</p>
+                  <p className="text-gray-800 font-bold flex items-center mt-2">
+                    <FaRupeeSign className="mr-1" />{item.price.toFixed(2)}
+                  </p>
+                  <div className="flex items-center mt-4">
+                    <button
+                      className="px-2 py-1 rounded-lg"
+                      style={{ backgroundColor: '#b45309', color: '#ffffff' }}
+                      onClick={() => removeFromCart(item._id)}
+                      disabled={!cart[item._id]}
+                    >
+                      <FaMinus />
+                    </button>
+                    <span className="mx-2">{cart[item._id] || 0}</span>
+                    <button
+                      className="px-2 py-1 rounded-lg"
+                      style={{ backgroundColor: '#b45309', color: '#ffffff' }}
+                      onClick={() => addToCart(item._id)}
+                    >
+                      <FaPlus />
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           </div>
-        ))}
-      </div>
+        ))
+      ) : (
+        <p className="text-gray-600 text-center">No menu items available.</p>
+      )}
 
-      {/* Cart */}
       {Object.keys(cart).length > 0 && (
         <div className="fixed bottom-0 left-0 right-0 bg-white p-4 shadow-md">
           <h2 className="text-lg sm:text-xl font-semibold flex items-center">
@@ -289,7 +292,6 @@ function Menu() {
         </div>
       )}
 
-      {/* Active Orders */}
       {orders.length > 0 && (
         <div className="mt-6">
           <h2 className="text-xl sm:text-2xl font-semibold mb-4 flex items-center">
