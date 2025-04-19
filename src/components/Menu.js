@@ -11,40 +11,63 @@ function Menu() {
   const [error, setError] = useState(null);
   const [orderSuccess, setOrderSuccess] = useState(null);
   const [sessionToken, setSessionToken] = useState(localStorage.getItem('sessionToken'));
-  const [isFreshScan, setIsFreshScan] = useState(!localStorage.getItem('invalidatedTable'));
+  const [isFreshScan, setIsFreshScan] = useState(false);
 
   const location = useLocation();
   const navigate = useNavigate();
   const queryParams = new URLSearchParams(location.search);
   const tableNumber = queryParams.get('table');
 
-  // Generate sessionToken only on fresh QR scan
+  // Validate session on page load
   useEffect(() => {
     if (!tableNumber) {
-      setError('Please scan a valid QR code.');
+      setError('Please scan a valid QR code to access the menu.');
       setLoading(false);
+      navigate('/');
       return;
     }
+
     const invalidatedTable = localStorage.getItem('invalidatedTable');
+    const lastScanTime = localStorage.getItem('lastScanTime');
+    const now = Date.now();
+    const scanTimeout = 5 * 60 * 1000; // 5 minutes
+
+    // Check if this is a fresh QR scan
+    if (!lastScanTime || now - parseInt(lastScanTime) > scanTimeout) {
+      setIsFreshScan(true);
+      localStorage.setItem('lastScanTime', now.toString());
+    }
+
+    // Block access if table is invalidated and not a fresh scan
     if (invalidatedTable === tableNumber && !isFreshScan) {
       setError('Your previous order is prepared or completed. Please scan the QR code again to place a new order.');
       setLoading(false);
+      navigate('/');
       return;
     }
+
+    // Generate sessionToken only for fresh scans
     if (!sessionToken && tableNumber && isFreshScan) {
-      const newToken = Math.random().toString(36).substring(2);
-      localStorage.setItem('sessionToken', newToken);
-      setSessionToken(newToken);
-      console.log('New session token generated:', newToken);
-      // Reset invalidatedTable on fresh scan
-      localStorage.removeItem('invalidatedTable');
-      setIsFreshScan(true);
+      axios.post(`${process.env.REACT_APP_API_URL}/api/sessions`, { tableNumber })
+        .then(res => {
+          const newToken = res.data.sessionToken;
+          localStorage.setItem('sessionToken', newToken);
+          setSessionToken(newToken);
+          localStorage.removeItem('invalidatedTable');
+          console.log('New session token generated:', newToken);
+        })
+        .catch(err => {
+          console.error('Error generating session token:', err.message);
+          setError('Failed to validate session. Please scan the QR code again.');
+          setLoading(false);
+          navigate('/');
+        });
     }
-  }, [tableNumber, isFreshScan]);
+  }, [tableNumber, isFreshScan, navigate]);
 
   useEffect(() => {
-    if (!tableNumber) {
-      setError('Please scan a valid QR code.');
+    if (!tableNumber || !sessionToken) {
+      setError('Please scan a valid QR code to access the menu.');
       setLoading(false);
       return;
     }
@@ -53,6 +76,7 @@ function Menu() {
     if (isNaN(parsedTableNumber) || parsedTableNumber < 1) {
       setError('Invalid table number. Please scan a valid QR code.');
       setLoading(false);
+      navigate('/');
       return;
     }
 
@@ -76,12 +100,12 @@ function Menu() {
         const hasPreparedOrder = res.data.some(order => ['Prepared', 'Completed'].includes(order.status));
         if (hasPreparedOrder) {
           console.log('Invalidating session due to Prepared/Completed order');
-          localStorage.removeItem('sessionToken');
           localStorage.setItem('invalidatedTable', tableNumber);
+          localStorage.removeItem('sessionToken');
           setSessionToken(null);
           setIsFreshScan(false);
           setError('Your previous order is prepared or completed. Please scan the QR code again to place a new order.');
-          navigate('/');
+          navigate('/', { replace: true }); // Replace history to prevent back navigation
         }
       })
       .catch(err => {
@@ -109,12 +133,12 @@ function Menu() {
           const hasPreparedOrder = res.data.some(order => ['Prepared', 'Completed'].includes(order.status));
           if (hasPreparedOrder) {
             console.log('Invalidating session due to Prepared/Completed order');
-            localStorage.removeItem('sessionToken');
             localStorage.setItem('invalidatedTable', tableNumber);
+            localStorage.removeItem('sessionToken');
             setSessionToken(null);
             setIsFreshScan(false);
             setError('Your previous order is prepared or completed. Please scan the QR code again to place a new order.');
-            navigate('/');
+            navigate('/', { replace: true }); // Replace history to prevent back navigation
           }
         })
         .catch(err => {
