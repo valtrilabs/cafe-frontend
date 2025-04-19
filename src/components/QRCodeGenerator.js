@@ -1,5 +1,5 @@
 import React from 'react';
-import QRCode from 'qrcode.react';
+import { QRCode } from 'qrcode.react';
 import { FaUtensils } from 'react-icons/fa';
 
 function QRCodeGenerator() {
