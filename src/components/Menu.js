@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { FaShoppingCart, FaUtensils, FaRupeeSign, FaHistory, FaCheck, FaSpinner } from 'react-icons/fa';
 
 function Menu() {
@@ -15,8 +15,10 @@ function Menu() {
   const [showSummary, setShowSummary] = useState(false);
   const [latestOrder, setLatestOrder] = useState(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [requiresQrScan, setRequiresQrScan] = useState(false);
 
   const location = useLocation();
+  const navigate = useNavigate();
   const tableNumber = new URLSearchParams(location.search).get('table');
 
   const initializeSession = () => {
@@ -26,14 +28,17 @@ function Menu() {
       return;
     }
 
-    axios.post(`${process.env.REACT_APP_API_URL}/api/orders/session`, { tableNumber: parseInt(tableNumber) })
+    axios.post(`${process.env.REACT_APP_API_URL}/api/orders/session`, { 
+      tableNumber: parseInt(tableNumber),
+      forceNew: true // Force a new session on QR scan
+    })
       .then(res => {
         console.log('Session initialized:', res.data);
         setSessionToken(res.data.token);
         setError(null);
-        setOrderStatus(null); // Reset order status
-        setCart([]); // Clear cart
-        setIsMiniCartOpen(false); // Hide mini-cart
+        setOrderStatus(null);
+        setCart([]);
+        setIsMiniCartOpen(false);
         checkOrderStatus();
       })
       .catch(err => {
@@ -87,18 +92,16 @@ function Menu() {
           console.log('Latest order status:', res.data);
           setLatestOrder(res.data);
           setOrderStatus(res.data.status);
-          // Only block if the latest order is Pending
           if (res.data.status === 'Pending') {
             setSessionToken(null);
             setCart([]);
             setIsMiniCartOpen(false);
             setError('An order is currently pending. Please wait until it is prepared or completed.');
+            sessionStorage.removeItem('qrScanValid');
           } else {
-            // Allow new order for Prepared or Completed
             setError(null);
           }
         } else {
-          // No orders exist, allow new order
           setOrderStatus(null);
           setLatestOrder(null);
           setError(null);
@@ -122,11 +125,22 @@ function Menu() {
   };
 
   useEffect(() => {
+    const qrScanValid = sessionStorage.getItem('qrScanValid');
+    if (!qrScanValid) {
+      setRequiresQrScan(true);
+      setIsLoading(false);
+      return;
+    }
+
+    if (tableNumber) {
+      sessionStorage.setItem('qrScanValid', 'true');
+    }
+
     setIsLoading(true);
-    setOrderStatus(null); // Reset on page load
-    setSessionToken(null); // Reset on page load
-    setCart([]); // Clear cart on page load
-    setIsMiniCartOpen(false); // Hide mini-cart on page load
+    setOrderStatus(null);
+    setSessionToken(null);
+    setCart([]);
+    setIsMiniCartOpen(false);
     fetchMenu();
     initializeSession();
   }, [tableNumber]);
@@ -140,9 +154,14 @@ function Menu() {
     setCart([]);
     setIsMiniCartOpen(false);
     setIsLoading(true);
-    setOrderStatus(null); // Reset order status
-    setSessionToken(null); // Reset session token
+    setOrderStatus(null);
+    setSessionToken(null);
     initializeSession();
+  };
+
+  const handleRescan = () => {
+    sessionStorage.removeItem('qrScanValid');
+    navigate('/qr');
   };
 
   const categories = [
@@ -245,6 +264,7 @@ function Menu() {
         setCart([]);
         setIsMiniCartOpen(false);
         setOrderStatus('Pending');
+        sessionStorage.removeItem('qrScanValid');
         checkOrderStatus();
         setError(null);
       })
@@ -286,8 +306,24 @@ function Menu() {
         </div>
       </header>
 
+      {/* QR Code Required Message */}
+      {requiresQrScan && (
+        <div className="container mx-auto p-2 sm:p-4 text-center">
+          <p className="text-lg text-gray-700">
+            Please scan the QR code to access the menu.
+          </p>
+          <button
+            className="mt-4 px-4 py-2 rounded-lg text-white flex items-center mx-auto"
+            style={{ backgroundColor: '#b45309' }}
+            onClick={handleRescan}
+          >
+            Scan QR Code
+          </button>
+        </div>
+      )}
+
       {/* Loading State */}
-      {isLoading && (
+      {!requiresQrScan && isLoading && (
         <div className="container mx-auto p-2 sm:p-4 text-center">
           <FaSpinner className="animate-spin text-4xl text-amber-600 mx-auto" />
           <p className="mt-2 text-gray-600">Loading menu...</p>
@@ -295,7 +331,7 @@ function Menu() {
       )}
 
       {/* Error Message */}
-      {error && !isLoading && (
+      {!requiresQrScan && error && !isLoading && (
         <div className="container mx-auto p-2 sm:p-4 text-center text-red-600">
           <p>{error}</p>
           {orderStatus !== 'Pending' && (
@@ -311,7 +347,7 @@ function Menu() {
       )}
 
       {/* Order Status or Menu */}
-      {orderStatus === 'Pending' ? (
+      {!requiresQrScan && !isLoading && orderStatus === 'Pending' ? (
         <div className="container mx-auto p-2 sm:p-4">
           <div className="bg-white rounded-lg shadow-md p-4 sm:p-6 text-center">
             <p className="text-lg text-gray-700">
@@ -327,7 +363,7 @@ function Menu() {
           </div>
         </div>
       ) : (
-        !isLoading && (
+        !requiresQrScan && !isLoading && (
           <>
             {/* Category Tabs */}
             <div className="container mx-auto p-2 sm:p-4">
@@ -415,7 +451,7 @@ function Menu() {
       )}
 
       {/* Persistent Mini-Cart */}
-      {cart.length > 0 || isMiniCartOpen ? (
+      {!requiresQrScan && (cart.length > 0 || isMiniCartOpen) ? (
         <div
           className={`fixed bottom-0 left-0 right-0 bg-white shadow-2xl z-30 transition-all duration-300 ${
             isMiniCartOpen ? 'h-80 sm:h-64' : 'h-12'
@@ -504,7 +540,7 @@ function Menu() {
       ) : null}
 
       {/* Order Summary Modal */}
-      {showSummary && latestOrder && (
+      {!requiresQrScan && showSummary && latestOrder && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
           <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-lg">
             <h2 className="text-xl sm:text-2xl font-bold mb-4 flex items-center">
