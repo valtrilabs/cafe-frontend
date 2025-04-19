@@ -1,6 +1,7 @@
 import React from 'react';
-import {QRCode} from 'qrcode.react'; // Use default import
+import { QRCode } from 'qrcode.react';
 import { FaUtensils } from 'react-icons/fa';
+
 
 function QRCodeGenerator() {
   const tables = Array.from({ length: 10 }, (_, i) => i + 1); // Tables 1 to 10
