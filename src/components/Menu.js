@@ -17,14 +17,20 @@ function Menu() {
   const queryParams = new URLSearchParams(location.search);
   const tableNumber = queryParams.get('table');
 
+  // Generate sessionToken only on initial QR scan
   useEffect(() => {
-    if (!sessionToken) {
+    if (!tableNumber) {
+      setError('Please scan a valid QR code.');
+      setLoading(false);
+      return;
+    }
+    if (!sessionToken && tableNumber) {
       const newToken = Math.random().toString(36).substring(2);
       localStorage.setItem('sessionToken', newToken);
       setSessionToken(newToken);
       console.log('New session token generated:', newToken);
     }
-  }, [sessionToken]);
+  }, [tableNumber]);
 
   useEffect(() => {
     if (!tableNumber) {
@@ -56,6 +62,14 @@ function Menu() {
       .then(res => {
         console.log('Orders fetched:', res.data);
         setOrders(res.data);
+        // Check for Prepared or Completed orders
+        const hasPreparedOrder = res.data.some(order => ['Prepared', 'Completed'].includes(order.status));
+        if (hasPreparedOrder) {
+          console.log('Invalidating session due to Prepared/Completed order');
+          localStorage.removeItem('sessionToken');
+          setSessionToken(null);
+          setError('Your previous order is prepared or completed. Please scan the QR code again to place a new order.');
+        }
       })
       .catch(err => {
         console.error('Error fetching orders:', err.message);
@@ -67,6 +81,7 @@ function Menu() {
     });
   }, [tableNumber, sessionToken]);
 
+  // Poll for order status
   useEffect(() => {
     if (!tableNumber || !sessionToken) return;
 
@@ -78,19 +93,19 @@ function Menu() {
         .then(res => {
           console.log('Polled orders:', res.data);
           setOrders(res.data);
-          // Check if any order is Prepared or Completed
           const hasPreparedOrder = res.data.some(order => ['Prepared', 'Completed'].includes(order.status));
           if (hasPreparedOrder) {
             console.log('Invalidating session due to Prepared/Completed order');
             localStorage.removeItem('sessionToken');
             setSessionToken(null);
+            setError('Your previous order is prepared or completed. Please scan the QR code again to place a new order.');
             navigate('/order?table=' + tableNumber);
           }
         })
         .catch(err => {
           console.error('Error polling orders:', err.message);
         });
-    }, 5000); // Reduced interval for faster updates
+    }, 5000);
 
     return () => clearInterval(interval);
   }, [tableNumber, sessionToken, navigate]);
@@ -162,7 +177,6 @@ function Menu() {
   }, {});
   console.log('Grouped menu:', groupedMenu);
 
-  // Debug rendering
   console.log('Rendering categories:', Object.keys(groupedMenu));
 
   const pendingOrders = orders.filter(order => order.status === 'Pending');
