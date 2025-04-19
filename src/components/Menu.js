@@ -12,7 +12,7 @@ function Menu() {
   const [orderSuccess, setOrderSuccess] = useState(null);
   const [sessionToken, setSessionToken] = useState(null);
   const [sessionLoading, setSessionLoading] = useState(true);
-  const [pageState, setPageState] = useState('loading'); // loading, menu, locked
+  const [pageState, setPageState] = useState('loading');
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -46,16 +46,15 @@ function Menu() {
         console.log('New session token generated:', newToken);
       } catch (err) {
         console.error('Error generating session token:', err.response ? err.response.data : err.message);
-        if (retry) {
+        if (retry && err.response?.data?.error === 'Session token conflict. Please try again.') {
           console.log('Retrying session creation...');
           return createSession(false);
         }
-        setError('Failed to validate session. Please scan the QR code again.');
+        setError('Failed to create session. Please try scanning the QR code again or contact support.');
         setPageState('locked');
-        navigate('/');
-      } finally {
-        setSessionLoading(false);
         setLoading(false);
+        setSessionLoading(false);
+        // Do not navigate immediately, allow user to retry
       }
     };
 
@@ -91,7 +90,6 @@ function Menu() {
       .then(res => {
         console.log('Orders fetched:', res.data);
         setOrders(res.data);
-        // Check for Prepared or Completed orders
         const hasPreparedOrder = res.data.some(order => ['Prepared', 'Completed'].includes(order.status));
         if (hasPreparedOrder) {
           console.log('Invalidating session due to Prepared/Completed order');
