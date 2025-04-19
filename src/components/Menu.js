@@ -54,7 +54,6 @@ function Menu() {
         setPageState('locked');
         setLoading(false);
         setSessionLoading(false);
-        // Do not navigate immediately, allow user to retry
       }
     };
 
