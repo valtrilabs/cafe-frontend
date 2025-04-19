@@ -10,7 +10,9 @@ function Menu() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [orderSuccess, setOrderSuccess] = useState(null);
-  const [sessionToken, setSessionToken] = useState(localStorage.getItem('sessionToken'));
+  const [sessionToken, setSessionToken] = useState(null);
+  const [sessionLoading, setSessionLoading] = useState(true);
+  const [pageState, setPageState] = useState('loading'); // loading, menu, locked
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -21,43 +23,53 @@ function Menu() {
   useEffect(() => {
     if (!tableNumber) {
       setError('Please scan a valid QR code to access the menu.');
+      setPageState('locked');
       setLoading(false);
+      setSessionLoading(false);
       navigate('/');
       return;
     }
 
-    // Treat each QR scan as fresh by clearing stale localStorage
-    localStorage.removeItem('lastScanTime');
-    localStorage.removeItem('invalidatedTable');
+    // Clear localStorage for fresh scan
     localStorage.removeItem('sessionToken');
     setSessionToken(null);
+    setSessionLoading(true);
 
-    // Generate new sessionToken
-    axios.post(`${process.env.REACT_APP_API_URL}/api/sessions`, { tableNumber })
-      .then(res => {
+    // Generate new sessionToken with retry
+    const createSession = async (retry = true) => {
+      try {
+        const res = await axios.post(`${process.env.REACT_APP_API_URL}/api/sessions`, { tableNumber });
         const newToken = res.data.sessionToken;
         localStorage.setItem('sessionToken', newToken);
         setSessionToken(newToken);
+        setPageState('menu');
         console.log('New session token generated:', newToken);
-      })
-      .catch(err => {
+      } catch (err) {
         console.error('Error generating session token:', err.response ? err.response.data : err.message);
+        if (retry) {
+          console.log('Retrying session creation...');
+          return createSession(false);
+        }
         setError('Failed to validate session. Please scan the QR code again.');
-        setLoading(false);
+        setPageState('locked');
         navigate('/');
-      });
+      } finally {
+        setSessionLoading(false);
+        setLoading(false);
+      }
+    };
+
+    createSession();
   }, [tableNumber, navigate]);
 
+  // Fetch menu and orders
   useEffect(() => {
-    if (!tableNumber || !sessionToken) {
-      setError('Please scan a valid QR code to access the menu.');
-      setLoading(false);
-      return;
-    }
+    if (!tableNumber || !sessionToken || sessionLoading) return;
 
     const parsedTableNumber = parseInt(tableNumber);
     if (isNaN(parsedTableNumber) || parsedTableNumber < 1) {
       setError('Invalid table number. Please scan a valid QR code.');
+      setPageState('locked');
       setLoading(false);
       navigate('/');
       return;
@@ -83,10 +95,10 @@ function Menu() {
         const hasPreparedOrder = res.data.some(order => ['Prepared', 'Completed'].includes(order.status));
         if (hasPreparedOrder) {
           console.log('Invalidating session due to Prepared/Completed order');
-          localStorage.setItem('invalidatedTable', tableNumber);
           localStorage.removeItem('sessionToken');
           setSessionToken(null);
           setError('Your previous order is prepared or completed. Please scan the QR code again to place a new order.');
+          setPageState('locked');
           navigate('/', { replace: true });
         }
       })
@@ -98,11 +110,11 @@ function Menu() {
     Promise.all([fetchMenu, fetchOrders]).then(() => {
       setLoading(false);
     });
-  }, [tableNumber, sessionToken, navigate]);
+  }, [tableNumber, sessionToken, sessionLoading, navigate]);
 
   // Poll for order status
   useEffect(() => {
-    if (!tableNumber || !sessionToken) return;
+    if (!tableNumber || !sessionToken || sessionLoading) return;
 
     const parsedTableNumber = parseInt(tableNumber);
     if (isNaN(parsedTableNumber)) return;
@@ -115,10 +127,10 @@ function Menu() {
           const hasPreparedOrder = res.data.some(order => ['Prepared', 'Completed'].includes(order.status));
           if (hasPreparedOrder) {
             console.log('Invalidating session due to Prepared/Completed order');
-            localStorage.setItem('invalidatedTable', tableNumber);
             localStorage.removeItem('sessionToken');
             setSessionToken(null);
             setError('Your previous order is prepared or completed. Please scan the QR code again to place a new order.');
+            setPageState('locked');
             navigate('/', { replace: true });
           }
         })
@@ -128,7 +140,7 @@ function Menu() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [tableNumber, sessionToken, navigate]);
+  }, [tableNumber, sessionToken, sessionLoading, navigate]);
 
   const addToCart = (itemId) => {
     setCart(prev => ({
@@ -203,10 +215,8 @@ function Menu() {
   console.log('Rendering categories:', Object.keys(groupedMenu));
 
   const pendingOrders = orders.filter(order => order.status === 'Pending');
-  const hasActiveOrder = orders.length > 0 && orders.some(order => ['Prepared', 'Completed'].includes(order.status));
-  console.log('Has active order:', hasActiveOrder, 'Orders:', orders);
 
-  if (loading) {
+  if (pageState === 'loading' || loading) {
     return (
       <div className="min-h-screen bg-orange-50 flex items-center justify-center">
         <p className="text-gray-600">Loading...</p>
@@ -214,32 +224,12 @@ function Menu() {
     );
   }
 
-  if (error) {
-    return (
-      <div className="min-h-screen bg-orange-50 flex items-center justify-center p-4">
-        <p className="text-red-600 text-center">{error}</p>
-      </div>
-    );
-  }
-
-  if (!tableNumber || !sessionToken) {
-    return (
-      <div className="min-h-screen bg-orange-50 flex items-center justify-center p-4">
-        <p className="text-red-600 text-center">Please scan a valid QR code to access the menu.</p>
-      </div>
-    );
-  }
-
-  if (hasActiveOrder) {
+  if (pageState === 'locked') {
     return (
       <div className="min-h-screen bg-orange-50 flex items-center justify-center p-4">
         <div className="bg-white rounded-lg shadow-md p-6 text-center">
-          <p className="text-red-600 mb-4">
-            An order for Table {tableNumber} is already being prepared or completed.
-          </p>
-          <p className="text-gray-600">
-            Please scan the QR code again to place a new order.
-          </p>
+          <p className="text-red-600 mb-4">{error || 'Please scan a valid QR code to access the menu.'}</p>
+          <p className="text-gray-600">Please scan the QR code again to place a new order.</p>
         </div>
       </div>
     );
