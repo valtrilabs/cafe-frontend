@@ -25,6 +25,7 @@ function Menu() {
     if (!tableNumber || isNaN(tableNumber)) {
       setError('Invalid or missing table number. Please scan a valid QR code.');
       setIsLoading(false);
+      setRequiresQrScan(true);
       return;
     }
 
@@ -65,6 +66,7 @@ function Menu() {
         }
         setError(errorMsg);
         setIsLoading(false);
+        setRequiresQrScan(true);
       });
   };
 
@@ -98,6 +100,12 @@ function Menu() {
             setIsMiniCartOpen(false);
             setError('An order is currently pending. Please wait until it is prepared or completed.');
             sessionStorage.removeItem('qrScanValid');
+          } else if (['Prepared', 'Completed'].includes(res.data.status)) {
+            setSessionToken(null);
+            setCart([]);
+            setIsMiniCartOpen(false);
+            setRequiresQrScan(true);
+            sessionStorage.removeItem('qrScanValid');
           } else {
             setError(null);
           }
@@ -125,24 +133,30 @@ function Menu() {
   };
 
   useEffect(() => {
-    const qrScanValid = sessionStorage.getItem('qrScanValid');
-    if (!qrScanValid) {
+    // If tableNumber is present, treat it as a fresh QR scan
+    if (tableNumber && !isNaN(tableNumber)) {
+      sessionStorage.setItem('qrScanValid', 'true');
+      setRequiresQrScan(false);
+      setIsLoading(true);
+      setOrderStatus(null);
+      setSessionToken(null);
+      setCart([]);
+      setIsMiniCartOpen(false);
+      fetchMenu();
+      initializeSession();
+    } else {
+      // No tableNumber or invalid, require QR scan
+      const qrScanValid = sessionStorage.getItem('qrScanValid');
+      if (!qrScanValid) {
+        setRequiresQrScan(true);
+        setIsLoading(false);
+        return;
+      }
+      // If qrScanValid exists but no tableNumber, still require rescan
       setRequiresQrScan(true);
       setIsLoading(false);
-      return;
+      sessionStorage.removeItem('qrScanValid');
     }
-
-    if (tableNumber) {
-      sessionStorage.setItem('qrScanValid', 'true');
-    }
-
-    setIsLoading(true);
-    setOrderStatus(null);
-    setSessionToken(null);
-    setCart([]);
-    setIsMiniCartOpen(false);
-    fetchMenu();
-    initializeSession();
   }, [tableNumber]);
 
   const retrySession = () => {
