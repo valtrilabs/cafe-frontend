@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { FaUtensils, FaPlus, FaMinus, FaShoppingCart, FaRupeeSign, FaClock } from 'react-icons/fa';
 
 function Menu() {
@@ -10,12 +10,12 @@ function Menu() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [orderSuccess, setOrderSuccess] = useState(null);
+  const [sessionToken, setSessionToken] = useState(localStorage.getItem('sessionToken'));
 
   const location = useLocation();
+  const navigate = useNavigate();
   const queryParams = new URLSearchParams(location.search);
   const tableNumber = queryParams.get('table');
-
-  const [sessionToken, setSessionToken] = useState(localStorage.getItem('sessionToken'));
 
   useEffect(() => {
     if (!sessionToken) {
@@ -52,7 +52,7 @@ function Menu() {
         setError('Failed to load menu. Please try again.');
       });
 
-    const fetchOrders = axios.get(`${process.env.REACT_APP_API_URL}/api/orders?tableNumber=${parsedTableNumber}`)
+    const fetchOrders = axios.get(`${process.env.REACT_APP_API_URL}/api/orders?tableNumber=${parsedTableNumber}&sessionToken=${sessionToken}`)
       .then(res => {
         console.log('Orders fetched:', res.data);
         setOrders(res.data);
@@ -74,18 +74,26 @@ function Menu() {
     if (isNaN(parsedTableNumber)) return;
 
     const interval = setInterval(() => {
-      axios.get(`${process.env.REACT_APP_API_URL}/api/orders?tableNumber=${parsedTableNumber}`)
+      axios.get(`${process.env.REACT_APP_API_URL}/api/orders?tableNumber=${parsedTableNumber}&sessionToken=${sessionToken}`)
         .then(res => {
           console.log('Polled orders:', res.data);
           setOrders(res.data);
+          // Check if any order is Prepared or Completed
+          const hasPreparedOrder = res.data.some(order => ['Prepared', 'Completed'].includes(order.status));
+          if (hasPreparedOrder) {
+            console.log('Invalidating session due to Prepared/Completed order');
+            localStorage.removeItem('sessionToken');
+            setSessionToken(null);
+            navigate('/order?table=' + tableNumber);
+          }
         })
         .catch(err => {
           console.error('Error polling orders:', err.message);
         });
-    }, 10000);
+    }, 5000); // Reduced interval for faster updates
 
     return () => clearInterval(interval);
-  }, [tableNumber, sessionToken]);
+  }, [tableNumber, sessionToken, navigate]);
 
   const addToCart = (itemId) => {
     setCart(prev => ({
@@ -123,11 +131,12 @@ function Menu() {
       quantity
     }));
 
-    console.log('Placing order with data:', { tableNumber: parsedTableNumber, items });
+    console.log('Placing order with data:', { tableNumber: parsedTableNumber, items, sessionToken });
 
     axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, {
       tableNumber: parsedTableNumber,
-      items
+      items,
+      sessionToken
     })
       .then(res => {
         console.log('Order placed successfully:', res.data);
@@ -156,6 +165,7 @@ function Menu() {
   // Debug rendering
   console.log('Rendering categories:', Object.keys(groupedMenu));
 
+  const pendingOrders = orders.filter(order => order.status === 'Pending');
   const hasActiveOrder = orders.length > 0 && orders.some(order => ['Prepared', 'Completed'].includes(order.status));
   console.log('Has active order:', hasActiveOrder, 'Orders:', orders);
 
@@ -191,7 +201,7 @@ function Menu() {
             An order for Table {tableNumber} is already being prepared or completed.
           </p>
           <p className="text-gray-600">
-            Please scan the QR code again after the current order is cleared.
+            Please scan the QR code again to place a new order.
           </p>
         </div>
       </div>
@@ -211,6 +221,35 @@ function Menu() {
         <p className="text-red-600 text-center mb-4">{error}</p>
       )}
 
+      {/* Pending Order Summary */}
+      {pendingOrders.length > 0 && (
+        <div className="mb-8 bg-white rounded-lg shadow-md p-4">
+          <h2 className="text-xl font-semibold mb-4 flex items-center">
+            <FaShoppingCart className="mr-2" style={{ color: '#b45309' }} /> Your Pending Order
+          </h2>
+          {pendingOrders.map(order => (
+            <div key={order._id}>
+              <p className="text-gray-600 text-sm">Order #{order.orderNumber} - Status: {order.status}</p>
+              <ul className="mt-2 space-y-2">
+                {order.items.map((item, index) => (
+                  <li key={index} className="flex justify-between text-gray-600 text-sm">
+                    <span>{item.quantity} x {item.itemId ? item.itemId.name : '[Deleted Item]'}</span>
+                    <span className="flex items-center">
+                      <FaRupeeSign className="mr-1" />
+                      {(item.quantity * (item.itemId ? item.itemId.price : 0)).toFixed(2)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+              <p className="mt-2 font-bold text-gray-800 flex items-center">
+                Total: <FaRupeeSign className="ml-1 mr-1" />
+                {order.items.reduce((sum, item) => sum + (item.itemId ? item.quantity * item.itemId.price : 0), 0).toFixed(2)}
+              </p>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Menu Items Grouped by Category */}
       <div className="menu-container">
         {Object.keys(groupedMenu).length > 0 ? (
@@ -223,7 +262,9 @@ function Menu() {
                   fontSize: '1.5rem',
                   fontWeight: 'bold',
                   display: 'block',
-                  marginBottom: '1rem'
+                  marginBottom: '1rem',
+                  backgroundColor: '#fff7ed',
+                  padding: '0.5rem'
                 }}
               >
                 {category}
@@ -309,7 +350,7 @@ function Menu() {
         </div>
       )}
 
-      {orders.length > 0 && (
+      {orders.length > 0 && pendingOrders.length === 0 && (
         <div className="mt-6">
           <h2 className="text-xl sm:text-2xl font-semibold mb-4 flex items-center">
             <FaClock className="mr-2" style={{ color: '#b45309' }} /> Your Orders
