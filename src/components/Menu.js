@@ -86,6 +86,8 @@ function Menu() {
           setLatestOrder(res.data);
           if (res.data.status === 'Prepared' || res.data.status === 'Completed') {
             setSessionToken(null); // Clear sessionToken to prevent ordering
+            setCart([]); // Clear cart
+            setIsMiniCartOpen(false); // Hide mini-cart
           }
         }
       })
@@ -103,7 +105,7 @@ function Menu() {
 
   useEffect(() => {
     setIsLoading(true);
-    fetchMenu(); // Fetch menu immediately
+    fetchMenu();
     initializeSession();
   }, [tableNumber]);
 
@@ -113,6 +115,8 @@ function Menu() {
       return;
     }
     setError(null);
+    setCart([]);
+    setIsMiniCartOpen(false);
     setIsLoading(true);
     initializeSession();
   };
@@ -138,11 +142,11 @@ function Menu() {
 
   const addToCart = (item) => {
     if (!sessionToken) {
-      setError('Cannot add items. Session not initialized. Please retry.');
+      setError('Cannot add items. Session not initialized. Please scan the QR code.');
       return;
     }
     if (orderStatus === 'Prepared' || orderStatus === 'Completed') {
-      setError('Cannot add items. Your previous order is already prepared or completed.');
+      setError('Cannot add items. Your previous order is already prepared or completed. Please scan the QR code again.');
       return;
     }
     try {
@@ -199,7 +203,7 @@ function Menu() {
 
   const placeOrder = () => {
     if (!sessionToken || cart.length === 0) {
-      setError('Cart is empty or session is invalid. Please retry session initialization.');
+      setError('Cart is empty or session is invalid. Please scan the QR code.');
       return;
     }
     if (orderStatus === 'Prepared' || orderStatus === 'Completed') {

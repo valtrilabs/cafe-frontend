@@ -3,6 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import Menu from './components/Menu';
 import OperatorDashboard from './components/OperatorDashboard';
 import PaymentDashboard from './components/PaymentDashboard';
+import QRCodeGenerator from './components/QRCodeGenerator';
 
 function App() {
   return (
@@ -12,6 +13,7 @@ function App() {
         <Route path="/order" element={<Menu />} />
         <Route path="/operator" element={<OperatorDashboard />} />
         <Route path="/payment" element={<PaymentDashboard />} />
+        <Route path="/qr" element={<QRCodeGenerator />} />
       </Routes>
     </Router>
   );

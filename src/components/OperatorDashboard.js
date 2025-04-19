@@ -306,33 +306,39 @@ function OperatorDashboard() {
     });
   };
 
-  const placeManualOrder = () => {
+  const placeManualOrder = async () => {
     if (!manualOrder.tableNumber || manualOrder.items.length === 0) {
       setError('Please select a table number and add items to the order.');
       return;
     }
-    const payload = {
-      tableNumber: parseInt(manualOrder.tableNumber),
-      items: manualOrder.items.map(item => ({
-        itemId: item.itemId,
-        quantity: item.quantity
-      })),
-      isManual: true
-    };
-    console.log('Placing manual order:', payload);
-    axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, payload)
-      .then((response) => {
-        console.log('Manual order placed:', response.data);
-        setManualOrder({ tableNumber: '', items: [], searchQuery: '' });
-        setFilteredMenuItems(menuItems);
-        fetchOrders('Today');
-        setError(null);
-        alert('Manual order placed successfully.');
-      })
-      .catch(err => {
-        console.error('Error placing manual order:', err.response?.data || err.message);
-        setError(`Failed to place manual order: ${err.response?.data?.error || err.message}`);
+    try {
+      // Create a session for manual order
+      const sessionResponse = await axios.post(`${process.env.REACT_APP_API_URL}/api/orders/session`, {
+        tableNumber: parseInt(manualOrder.tableNumber)
       });
+      const sessionToken = sessionResponse.data.token;
+
+      const payload = {
+        tableNumber: parseInt(manualOrder.tableNumber),
+        items: manualOrder.items.map(item => ({
+          itemId: item.itemId,
+          quantity: item.quantity
+        })),
+        isManual: true,
+        sessionToken
+      };
+      console.log('Placing manual order:', payload);
+      const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, payload);
+      console.log('Manual order placed:', response.data);
+      setManualOrder({ tableNumber: '', items: [], searchQuery: '' });
+      setFilteredMenuItems(menuItems);
+      fetchOrders('Today');
+      setError(null);
+      alert('Manual order placed successfully.');
+    } catch (err) {
+      console.error('Error placing manual order:', err.response?.data || err.message);
+      setError(`Failed to place manual order: ${err.response?.data?.error || err.message}`);
+    }
   };
 
   const filteredOrders = orders.filter(order => 
