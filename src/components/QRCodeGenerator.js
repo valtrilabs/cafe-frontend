@@ -14,8 +14,15 @@ function QRCodeGenerator() {
       try {
         setIsLoading(true);
         setError(null);
-        console.log('Fetching tables from:', `${process.env.REACT_APP_API_URL}/api/session/tables`);
-        const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/session/tables`);
+        const apiUrl = process.env.REACT_APP_API_URL;
+        console.log('API URL:', apiUrl); // Debug API URL
+        if (!apiUrl) {
+          throw new Error('REACT_APP_API_URL is not defined');
+        }
+
+        // Fetch tables
+        console.log('Fetching tables from:', `${apiUrl}/api/session/tables`);
+        const response = await axios.get(`${apiUrl}/api/session/tables`);
         console.log('Tables response:', response.data);
         const tablesData = response.data.tables || [];
         if (tablesData.length === 0) {
@@ -23,18 +30,20 @@ function QRCodeGenerator() {
           return;
         }
 
+        // Generate QR codes
         const qrCodesData = await Promise.all(
           tablesData.map(async (table) => {
             try {
               const sessionToken = uuid();
               console.log(`Generating session for table ${table.tableId} with token:`, sessionToken);
-              const sessionResponse = await axios.post(`${process.env.REACT_APP_API_URL}/api/session`, {
+              const sessionResponse = await axios.post(`${apiUrl}/api/session`, {
                 tableId: table.tableId,
                 sessionToken
               });
-              console.log(`Session for table ${table.tableId}:`, sessionResponse.data);
+              console.log(`Session response for table ${table.tableId}:`, sessionResponse.data);
               if (!sessionResponse.data.sessionToken) {
-                throw new Error(`No sessionToken returned for table ${table.tableId}`);
+                console.error(`No sessionToken returned for table ${table.tableId}`);
+                return null;
               }
               const qrCodeUrl = `${process.env.REACT_APP_FRONTEND_URL}/qr-prompt?table=${table.tableId}&session=${sessionResponse.data.sessionToken}`;
               console.log(`QR Code URL for table ${table.tableId}:`, qrCodeUrl);
@@ -43,15 +52,17 @@ function QRCodeGenerator() {
               console.error(`Error creating session for table ${table.tableId}:`, {
                 message: err.message,
                 response: err.response?.data,
-                status: err.response?.status
+                status: err.response?.status,
+                url: `${apiUrl}/api/session`
               });
               return null; // Skip this table
             }
           })
         );
+
         const validQRCodes = qrCodesData.filter(code => code !== null);
         if (validQRCodes.length === 0) {
-          setError('Failed to generate any QR codes. Please check backend session creation.');
+          setError('Failed to generate any QR codes. Check backend session creation.');
         } else {
           setQRCodes(validQRCodes);
         }
@@ -61,7 +72,7 @@ function QRCodeGenerator() {
           response: err.response?.data,
           status: err.response?.status
         });
-        setError('Failed to generate QR codes. Please check your connection or backend setup.');
+        setError(`Failed to generate QR codes: ${err.message}`);
       } finally {
         setIsLoading(false);
       }
