@@ -3,6 +3,11 @@ import axios from 'axios';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FaUtensils, FaPlus, FaMinus, FaShoppingCart, FaRupeeSign, FaClock } from 'react-icons/fa';
 
+// Configure axios with a timeout
+const axiosInstance = axios.create({
+  timeout: 10000, // 10-second timeout
+});
+
 function Menu() {
   const [menuItems, setMenuItems] = useState([]);
   const [cart, setCart] = useState({});
@@ -38,7 +43,7 @@ function Menu() {
     // Generate new sessionToken with retry
     const createSession = async (retry = true) => {
       try {
-        const res = await axios.post(`${process.env.REACT_APP_API_URL}/api/sessions`, { tableNumber });
+        const res = await axiosInstance.post(`${process.env.REACT_APP_API_URL}/api/sessions`, { tableNumber });
         const newToken = res.data.sessionToken;
         localStorage.setItem('sessionToken', newToken);
         setSessionToken(newToken);
@@ -75,7 +80,7 @@ function Menu() {
 
     console.log('Fetching data for tableNumber:', parsedTableNumber, 'sessionToken:', sessionToken);
 
-    const fetchMenu = axios.get(`${process.env.REACT_APP_API_URL}/api/menu`)
+    const fetchMenu = axiosInstance.get(`${process.env.REACT_APP_API_URL}/api/menu`)
       .then(res => {
         console.log('Menu items fetched:', res.data);
         setMenuItems(res.data.filter(item => item.isAvailable));
@@ -85,7 +90,7 @@ function Menu() {
         setError('Failed to load menu. Please try again.');
       });
 
-    const fetchOrders = axios.get(`${process.env.REACT_APP_API_URL}/api/orders?tableNumber=${parsedTableNumber}&sessionToken=${sessionToken}`)
+    const fetchOrders = axiosInstance.get(`${process.env.REACT_APP_API_URL}/api/orders?tableNumber=${parsedTableNumber}&sessionToken=${sessionToken}`)
       .then(res => {
         console.log('Orders fetched:', res.data);
         setOrders(res.data);
@@ -104,9 +109,15 @@ function Menu() {
         setError('Failed to load orders. Please try again.');
       });
 
-    Promise.all([fetchMenu, fetchOrders]).then(() => {
-      setLoading(false);
-    });
+    Promise.all([fetchMenu, fetchOrders])
+      .then(() => {
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('Error in Promise.all:', err.message);
+        setError('Failed to load data. Please try again.');
+        setLoading(false);
+      });
   }, [tableNumber, sessionToken, sessionLoading, navigate]);
 
   // Poll for order status
@@ -117,7 +128,7 @@ function Menu() {
     if (isNaN(parsedTableNumber)) return;
 
     const interval = setInterval(() => {
-      axios.get(`${process.env.REACT_APP_API_URL}/api/orders?tableNumber=${parsedTableNumber}&sessionToken=${sessionToken}`)
+      axiosInstance.get(`${process.env.REACT_APP_API_URL}/api/orders?tableNumber=${parsedTableNumber}&sessionToken=${sessionToken}`)
         .then(res => {
           console.log('Polled orders:', res.data);
           setOrders(res.data);
@@ -177,7 +188,7 @@ function Menu() {
 
     console.log('Placing order with data:', { tableNumber: parsedTableNumber, items, sessionToken });
 
-    axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, {
+    axiosInstance.post(`${process.env.REACT_APP_API_URL}/api/orders`, {
       tableNumber: parsedTableNumber,
       items,
       sessionToken
