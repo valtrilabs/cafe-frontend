@@ -14,8 +14,16 @@ function QRPrompt() {
 
   useEffect(() => {
     const checkSession = async () => {
-      if (!tableId || !sessionToken) {
-        setError('Invalid QR code. Please scan again.');
+      console.log('QR Prompt URL:', window.location.href); // Debug URL
+      console.log('Table ID:', tableId, 'Session Token:', sessionToken); // Debug params
+
+      if (!tableId || isNaN(parseInt(tableId))) {
+        setError('Invalid table number. Please scan a valid QR code.');
+        setIsLoading(false);
+        return;
+      }
+      if (!sessionToken) {
+        setError('Missing session token. Please scan a valid QR code.');
         setIsLoading(false);
         return;
       }
@@ -24,15 +32,24 @@ function QRPrompt() {
         const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/session/status`, {
           params: { table: tableId, session: sessionToken }
         });
-        console.log('Session status:', response.data);
+        console.log('Session status response:', response.data); // Debug response
         setStatus(response.data.status);
         if (response.data.status === 'active') {
           localStorage.setItem(`sessionToken_${tableId}`, sessionToken);
           navigate(`/menu?table=${tableId}&session=${sessionToken}`);
+        } else {
+          setError(`Session is ${response.data.status}. Please scan a new QR code.`);
         }
       } catch (err) {
-        console.error('Error checking session:', err.response?.data || err.message);
-        setError('Failed to validate QR code. Please scan again.');
+        console.error('Error checking session:', {
+          message: err.message,
+          response: err.response?.data,
+          status: err.response?.status
+        });
+        setError(
+          err.response?.data?.error ||
+          'Failed to validate QR code. Please check your connection and try again.'
+        );
       } finally {
         setIsLoading(false);
       }
