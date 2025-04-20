@@ -17,12 +17,16 @@ function Menu() {
   useEffect(() => {
     const fetchMenu = async () => {
       try {
-        console.log('Fetching menu for table:', tableId, 'session:', sessionToken); // Debug
+        console.log('Fetching menu for table:', tableId, 'session:', sessionToken);
         const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/menu`);
-        console.log('Menu response:', response.data); // Debug
+        console.log('Menu response:', response.data);
         setMenuItems(response.data);
       } catch (err) {
-        console.error('Error fetching menu:', err);
+        console.error('Error fetching menu:', {
+          message: err.message,
+          response: err.response?.data,
+          status: err.response?.status
+        });
         setError('Failed to load menu. Please try again.');
       } finally {
         setIsLoading(false);
@@ -67,7 +71,7 @@ function Menu() {
 
     setIsSubmitting(true);
     try {
-      console.log('Placing order for table:', tableId, 'session:', sessionToken); // Debug
+      console.log('Placing order for table:', tableId, 'session:', sessionToken);
       const items = cart.map((item) => ({
         itemId: item._id,
         quantity: item.quantity
@@ -77,13 +81,22 @@ function Menu() {
         items,
         sessionToken
       });
-      console.log('Order response:', response.data); // Debug
+      console.log('Order response:', response.data);
       setCart([]);
       setError(null);
+      console.log('Navigating to order-confirmation:', `/order-confirmation?table=${tableId}&session=${sessionToken}`);
       navigate(`/order-confirmation?table=${tableId}&session=${sessionToken}`);
     } catch (err) {
-      console.error('Error placing order:', err);
-      setError('Failed to place order. Please try again.');
+      console.error('Error placing order:', {
+        message: err.message,
+        response: err.response?.data,
+        status: err.response?.status
+      });
+      const errorMessage = err.response?.data?.error || 'Failed to place order. Please try again.';
+      setError(errorMessage);
+      if (errorMessage.includes('session is')) {
+        setError(`${errorMessage} Scan a new QR code to start a new session.`);
+      }
     } finally {
       setIsSubmitting(false);
     }
