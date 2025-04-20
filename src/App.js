@@ -16,6 +16,7 @@ function App() {
         <Route path="/operator" element={<OperatorDashboard />} />
         <Route path="/order-confirmation" element={<OrderConfirmation />} />
         <Route path="/" element={<QRCodeGenerator />} />
+        <Route path="payment" element={<PaymentDashboard />} />
       </Routes>
     </Router>
   );
