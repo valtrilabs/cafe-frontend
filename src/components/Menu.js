@@ -12,16 +12,24 @@ function Menu() {
   const [addedItemId, setAddedItemId] = useState(null);
   const [sessionToken, setSessionToken] = useState(null);
   const [orderPlaced, setOrderPlaced] = useState(null);
+  const [isLoading, setIsLoading] = useState(true);
 
   const location = useLocation();
   const navigate = useNavigate();
-  const tableId = new URLSearchParams(location.search).get('table') || 'Unknown';
+  const tableId = new URLSearchParams(location.search).get('table');
   const sessionFromUrl = new URLSearchParams(location.search).get('session');
 
   const validateSession = async () => {
     try {
+      if (!tableId || isNaN(parseInt(tableId))) {
+        setError('Invalid table number');
+        navigate(`/qr-prompt?table=${tableId || 'Unknown'}`);
+        return false;
+      }
+
       const storedToken = localStorage.getItem(`sessionToken_${tableId}`) || sessionFromUrl;
       if (!storedToken) {
+        console.log('No session token found, redirecting to QR prompt');
         navigate(`/qr-prompt?table=${tableId}`);
         return false;
       }
@@ -29,17 +37,20 @@ function Menu() {
       const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/session/status`, {
         params: { table: tableId, session: storedToken }
       });
+      console.log('Session status response:', response.data);
       if (response.data.status === 'active') {
         setSessionToken(storedToken);
         localStorage.setItem(`sessionToken_${tableId}`, storedToken);
         return true;
       } else {
+        console.log(`Session status is ${response.data.status}, redirecting to QR prompt`);
         localStorage.removeItem(`sessionToken_${tableId}`);
         navigate(`/qr-prompt?table=${tableId}`);
         return false;
       }
     } catch (err) {
-      console.error('Session validation error:', err);
+      console.error('Session validation error:', err.response?.data || err.message);
+      setError('Failed to validate session. Please scan the QR code again.');
       localStorage.removeItem(`sessionToken_${tableId}`);
       navigate(`/qr-prompt?table=${tableId}`);
       return false;
@@ -47,6 +58,7 @@ function Menu() {
   };
 
   const fetchMenu = () => {
+    setIsLoading(true);
     axios.get(`${process.env.REACT_APP_API_URL}/api/menu`)
       .then(res => {
         console.log('Menu items fetched:', res.data);
@@ -54,9 +66,10 @@ function Menu() {
         setError(null);
       })
       .catch(err => {
-        console.error('Error fetching menu:', err);
+        console.error('Error fetching menu:', err.response?.data || err.message);
         setError('Failed to load menu. Please try again.');
-      });
+      })
+      .finally(() => setIsLoading(false));
   };
 
   useEffect(() => {
@@ -64,6 +77,8 @@ function Menu() {
       const isValid = await validateSession();
       if (isValid) {
         fetchMenu();
+      } else {
+        setIsLoading(false);
       }
     };
     initialize();
@@ -125,6 +140,7 @@ function Menu() {
       setTimeout(() => setAddedItemId(null), 1000);
     } catch (error) {
       console.error('Error adding to cart:', error);
+      setError('Failed to add item to cart.');
     }
   };
 
@@ -142,11 +158,14 @@ function Menu() {
 
   const placeOrder = async () => {
     try {
+      setIsLoading(true);
+      console.log('Placing order:', { tableId, sessionToken, items: cart });
       const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, {
         tableId: parseInt(tableId),
         sessionToken,
         items: cart.map(item => ({ itemId: item.itemId, quantity: item.quantity }))
       });
+      console.log('Order response:', response.data);
       setOrderPlaced({
         orderNumber: response.data.orderNumber,
         items: cart,
@@ -155,9 +174,12 @@ function Menu() {
       });
       setCart([]);
       setIsMiniCartOpen(false);
+      localStorage.removeItem(`sessionToken_${tableId}`);
     } catch (err) {
-      console.error('Error placing order:', err);
+      console.error('Error placing order:', err.response?.data || err.message);
       setError(err.response?.data?.error || 'Failed to place order. Please try again.');
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -217,6 +239,13 @@ function Menu() {
         </div>
       </header>
 
+      {/* Loading State */}
+      {isLoading && (
+        <div className="container mx-auto p-2 sm:p-4 text-center text-gray-600">
+          <p>Loading menu...</p>
+        </div>
+      )}
+
       {/* Error Message */}
       {error && (
         <div className="container mx-auto p-2 sm:p-4 text-center text-red-600">
@@ -234,175 +263,171 @@ function Menu() {
         </div>
       )}
 
-      {/* Category Tabs */}
-      <div className="container mx-auto p-2 sm:p-4">
-        {categories.length === 1 ? (
-          <p className="text-center text-gray-600 text-sm">No categories available.</p>
-        ) : (
-          <div className="flex overflow-x-auto space-x-1 sm:space-x-2 pb-2">
-            {categories.map(category => (
-              <button
-                key={category.name}
-                className={`flex items-center px-3 sm:px-4 py-1 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
-                  selectedCategory === category.name
-                    ? 'shadow-md hover:bg-amber-700'
-                    : 'hover:bg-amber-300'
-                }`}
-                style={{
-                  backgroundColor: selectedCategory === category.name ? '#b45309' : '#fed7aa',
-                  color: selectedCategory === category.name ? '#ffffff' : '#1f2937'
-                }}
-                onClick={() => setSelectedCategory(category.name)}
-              >
-                <span className="mr-1 sm:mr-2">{category.icon}</span>
-                {category.name}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-
-      {/* Menu Items */}
-      <div className="container mx-auto p-2 sm:p-4">
-        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
-          {filteredItems.length === 0 ? (
-            <p className="text-center col-span-full text-gray-600 text-sm">
-              No items available.
-            </p>
-          ) : (
-            filteredItems.map(item => (
-              <div
-                key={item._id}
-                className="bg-white rounded-lg shadow-md p-2 flex flex-col hover:scale-105 hover:shadow-xl transition-transform duration-200"
-              >
-                <img
-                  src={
-                    item.image
-                      ? `${process.env.REACT_APP_API_URL}${item.image}`
-                      : 'https://source.unsplash.com/100x100/?food'
-                  }
-                  alt={item.name}
-                  className="w-full h-20 object-cover rounded-md mb-2"
-                />
-                <div className="flex-1">
-                  <h2 className="text-sm font-semibold text-gray-800 truncate">{item.name}</h2>
-                  <p className="text-xs text-gray-600 line-clamp-2">{item.description}</p>
-                  <p className="text-gray-700 font-bold mt-1 sm:mt-2 flex items-center text-xs sm:text-sm">
-                    <FaRupeeSign className="mr-1" />{item.price.toFixed(2)}
-                  </p>
+      {!isLoading && !error && (
+        <>
+          {/* Category Tabs */}
+          <div className="container mx-auto p-2 sm:p-4">
+            {categories.length === 1 ? (
+              <p className="text-center text-gray-600 text-sm">No categories available.</p>
+            ) : (
+              <div className="flex overflow-x-auto space-x-1 sm:space-x-2 pb-2">
+                {categories.map(category => (
                   <button
-                    className={`mt-2 sm:mt-3 w-full text-white px-2 sm:px-4 py-1 sm:py-2 rounded-lg transition-colors flex items-center justify-center text-xs sm:text-sm ${
-                      item.isAvailable
-                        ? 'hover:bg-green-600 focus:ring-2 focus:ring-green-400'
-                        : 'bg-red-500 hover:bg-red-600 cursor-not-allowed'
-                    } ${addedItemId === item._id ? 'animate-pulse' : ''}`}
-                    style={{ backgroundColor: item.isAvailable ? '#16a34a' : '#ef4444' }}
-                    onClick={() => addToCart(item)}
-                    disabled={!item.isAvailable}
+                    key={category.name}
+                    className={`flex items-center px-3 sm:px-4 py-1 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
+                      selectedCategory === category.name
+                        ? 'shadow-md hover:bg-amber-700'
+                        : 'hover:bg-amber-300'
+                    }`}
+                    style={{
+                      backgroundColor: selectedCategory === category.name ? '#b45309' : '#fed7aa',
+                      color: selectedCategory === category.name ? '#ffffff' : '#1f2937'
+                    }}
+                    onClick={() => setSelectedCategory(category.name)}
                   >
-                    {item.isAvailable ? (
-                      <>
-                        <FaShoppingCart className="mr-1 sm:mr-2" /> 
-                        {addedItemId === item._id ? 'Added!' : 'Add to Cart'}
-                      </>
-                    ) : (
-                      'Sold Out'
-                    )}
+                    <span className="mr-1 sm:mr-2">{category.icon}</span>
+                    {category.name}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Menu Items */}
+          <div className="container mx-auto p-2 sm:p-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
+              {filteredItems.length === 0 ? (
+                <p className="text-center col-span-full text-gray-600 text-sm">
+                  No items available.
+                </p>
+              ) : (
+                filteredItems.map(item => (
+                  <div
+                    key={item._id}
+                    className="bg-white rounded-lg shadow-md p-2 flex flex-col hover:scale-105 hover:shadow-xl transition-transform duration-200"
+                  >
+                    <img
+                      src={
+                        item.image
+                          ? `${process.env.REACT_APP_API_URL}${item.image}`
+                          : 'https://source.unsplash.com/100x100/?food'
+                      }
+                      alt={item.name}
+                      className="w-full h-20 object-cover rounded-md mb-2"
+                    />
+                    <div className="flex-1">
+                      <h2 className="text-sm font-semibold text-gray-800 truncate">{item.name}</h2>
+                      <p className="text-xs text-gray-600 line-clamp-2">{item.description}</p>
+                      <p className="text-gray-700 font-bold mt-1 sm:mt-2 flex items-center text-xs sm:text-sm">
+                        <FaRupeeSign className="mr-1" />{item.price.toFixed(2)}
+                      </p>
+                      <button
+                        className={`mt-2 sm:mt-3 w-full text-white px-2 sm:px-4 py-1 sm:py-2 rounded-lg transition-colors flex items-center justify-center text-xs sm:text-sm ${
+                          item.isAvailable
+                            ? 'hover:bg-green-600 focus:ring-2 focus:ring-green-400'
+                            : 'bg-red-500 hover:bg-red-600 cursor-not-allowed'
+                        } ${addedItemId === item._id ? 'animate-pulse' : ''}`}
+                        style={{ backgroundColor: item.isAvailable ? '#16a34a' : '#ef4444' }}
+                        onClick={() => addToCart(item)}
+                        disabled={!item.isAvailable}
+                      >
+                        {item.isAvailable ? (
+                          <>
+                            <FaShoppingCart className="mr-1 sm:mr-2" /> 
+                            {addedItemId === item._id ? 'Added!' : 'Add to Cart'}
+                          </>
+                        ) : (
+                          'Sold Out'
+                        )}
+                      </button>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+
+          {/* Persistent Mini-Cart */}
+          {cart.length > 0 && (
+            <div
+              className={`fixed bottom-0 left-0 right-0 bg-white shadow-2xl z-30 transition-all duration-300 ${
+                isMiniCartOpen ? 'h-80 sm:h-64' : 'h-12'
+              }`}
+            >
+              <div className="container mx-auto p-2 sm:p-4">
+                <div className="flex justify-between items-center">
+                  <h2 className="text-lg sm:text-xl font-bold text-gray-800 flex items-center">
+                    <FaShoppingCart className="mr-1 sm:mr-2" /> Your Cart ({itemCount} item{itemCount !== 1 ? 's' : ''})
+                  </h2>
+                  <button
+                    className="text-gray-600 hover:text-gray-800 focus:outline-none text-sm sm:text-base"
+                    onClick={() => setIsMiniCartOpen(!isMiniCartOpen)}
+                  >
+                    {isMiniCartOpen ? 'Hide Cart ▼' : 'See Cart ▲'}
                   </button>
                 </div>
-              </div>
-            ))
-          )}
-        </div>
-      </div>
-
-      {/* Persistent Mini-Cart */}
-      {cart.length > 0 || isMiniCartOpen ? (
-        <div
-          className={`fixed bottom-0 left-0 right-0 bg-white shadow-2xl z-30 transition-all duration-300 ${
-            isMiniCartOpen ? 'h-80 sm:h-64' : 'h-12'
-          }`}
-        >
-          <div className="container mx-auto p-2 sm:p-4">
-            <div className="flex justify-between items-center">
-              <h2 className="text-lg sm:text-xl font-bold text-gray-800 flex items-center">
-                <FaShoppingCart className="mr-1 sm:mr-2" /> Your Cart ({itemCount} item{itemCount !== 1 ? 's' : ''})
-              </h2>
-              <button
-                className="text-gray-600 hover:text-gray-800 focus:outline-none text-sm sm:text-base"
-                onClick={() => setIsMiniCartOpen(!isMiniCartOpen)}
-              >
-                {isMiniCartOpen ? 'Hide Cart ▼' : 'See Cart ▲'}
-              </button>
-            </div>
-            {isMiniCartOpen && (
-              <div className="mt-2 sm:mt-4">
-                {cart.length === 0 ? (
-                  <p className="text-gray-600 text-sm">Your cart is empty.</p>
-                ) : (
-                  <div className="max-h-36 overflow-y-auto space-y-2">
-                    {cart.map(item => (
-                      <div
-                        key={item.itemId}
-                        className="flex items-center py-1 sm:py-2 border-b"
-                      >
-                        <img
-                          src={item.image}
-                          alt={item.name}
-                          className="w-10 sm:w-12 h-10 sm:h-12 object-cover rounded mr-2 sm:mr-3"
-                        />
-                        <div className="flex-1">
-                          <span className="text-xs sm:text-sm font-medium text-gray-800">{item.name}</span>
-                          <div className="flex items-center mt-1 space-x-1">
+                {isMiniCartOpen && (
+                  <div className="mt-2 sm:mt-4">
+                    <div className="max-h-32 sm:max-h-40 overflow-y-auto">
+                      {cart.map(item => (
+                        <div key={item.itemId} className="flex items-center justify-between py-2 border-b">
+                          <div className="flex items-center">
+                            <img
+                              src={item.image}
+                              alt={item.name}
+                              className="w-10 h-10 object-cover rounded-md mr-2"
+                            />
+                            <div>
+                              <p className="text-sm font-medium text-gray-800">{item.name}</p>
+                              <p className="text-xs text-gray-600 flex items-center">
+                                <FaRupeeSign className="mr-1" />{(item.price * item.quantity).toFixed(2)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="flex items-center space-x-2">
                             <button
-                              className="px-1 sm:px-2 py-0.5 sm:py-1 bg-gray-200 rounded-l hover:bg-gray-300 focus:ring-2 focus:ring-gray-400 text-xs sm:text-sm"
+                              className="text-gray-600 hover:text-gray-800 text-xs sm:text-sm"
                               onClick={() => updateQuantity(item.itemId, -1)}
                             >
-                              -
+                              −
                             </button>
-                            <span className="px-2 sm:px-3 py-0.5 sm:py-1 bg-gray-100 text-xs sm:text-sm">{item.quantity}</span>
+                            <span className="text-sm">{item.quantity}</span>
                             <button
-                              className="px-1 sm:px-2 py-0.5 sm:py-1 bg-gray-200 rounded-r hover:bg-gray-300 focus:ring-2 focus:ring-gray-400 text-xs sm:text-sm"
+                              className="text-gray-600 hover:text-gray-800 text-xs sm:text-sm"
                               onClick={() => updateQuantity(item.itemId, 1)}
                             >
                               +
                             </button>
+                            <button
+                              className="text-red-600 hover:text-red-800 text-xs sm:text-sm"
+                              onClick={() => removeFromCart(item.itemId)}
+                            >
+                              Remove
+                            </button>
                           </div>
                         </div>
-                        <div className="text-right">
-                          <p className="text-xs sm:text-sm text-gray-700 flex items-center">
-                            <FaRupeeSign className="mr-1" />
-                            {(item.price * item.quantity).toFixed(2)}
-                          </p>
-                          <button
-                            className="text-red-500 hover:text-red-700 text-xs focus:outline-none"
-                            onClick={() => removeFromCart(item.itemId)}
-                          >
-                            Remove
-                          </button>
-                        </div>
-                      </div>
-                    ))}
+                      ))}
+                    </div>
+                    <div className="mt-2 sm:mt-4 flex justify-between items-center">
+                      <p className="text-lg font-bold flex items-center">
+                        Total: <FaRupeeSign className="ml-1 mr-1" />{totalPrice.toFixed(2)}
+                      </p>
+                      <button
+                        className="px-4 sm:px-6 py-2 rounded-lg text-white flex items-center text-sm sm:text-base"
+                        style={{ backgroundColor: '#b45309' }}
+                        onClick={placeOrder}
+                        disabled={isLoading}
+                      >
+                        {isLoading ? 'Placing...' : 'Place Order'}
+                      </button>
+                    </div>
                   </div>
                 )}
-                <div className="mt-2 sm:mt-4 flex flex-col sm:flex-row justify-between items-center gap-2 sm:gap-4">
-                  <p className="text-base sm:text-lg font-bold text-gray-800 flex items-center">
-                    Total: <FaRupeeSign className="ml-1 mr-1" />{totalPrice.toFixed(2)}
-                  </p>
-                  <button
-                    className="w-full sm:w-auto px-4 sm:px-6 py-1 sm:py-2 rounded-lg text-white transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center text-xs sm:text-sm"
-                    style={{ backgroundColor: cart.length === 0 ? '#9ca3af' : '#b45309' }}
-                    onClick={placeOrder}
-                    disabled={cart.length === 0}
-                  >
-                    <FaUtensils className="mr-1 sm:mr-2" /> Order Now
-                  </button>
-                </div>
               </div>
-            )}
-          </div>
-        </div>
-      ) : null}
+            </div>
+          )}
+        </>
+      )}
     </div>
   );
 }
