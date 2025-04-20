@@ -1,19 +1,17 @@
-import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import QRCodeGenerator from './QRCodeGenerator';
-import QRPrompt from './QRPrompt';
-import Menu from './Menu';
-import OrderConfirmation from './OrderConfirmation';
+import Menu from './components/Menu';
+import OperatorDashboard from './components/OperatorDashboard';
+import PaymentDashboard from './components/PaymentDashboard';
+import QRCodeGenerator from './components/QRCodeGenerator';
 
 function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/qrcodes" element={<QRCodeGenerator />} />
-        <Route path="/qr-prompt" element={<QRPrompt />} />
-        <Route path="/menu" element={<Menu />} />
-        <Route path="/order-confirmation" element={<OrderConfirmation />} />
-        <Route path="/" element={<QRCodeGenerator />} />
+        <Route path="/order" element={<Menu />} />
+        <Route path="/operator" element={<OperatorDashboard />} />
+        <Route path="/payment" element={<PaymentDashboard />} />
+        <Route path="/qr" element={<QRCodeGenerator />} />
       </Routes>
     </Router>
   );
