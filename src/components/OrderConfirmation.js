@@ -11,7 +11,6 @@ function OrderConfirmation() {
 
   useEffect(() => {
     console.log('OrderConfirmation loaded, table:', tableId, 'session:', sessionToken);
-    // Simulate validation or fetching order details
     setTimeout(() => {
       if (!tableId || !sessionToken) {
         setError('Invalid order details.');
