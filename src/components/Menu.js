@@ -88,6 +88,7 @@ function Menu() {
       .catch(err => {
         console.error('Error fetching menu:', err.message);
         setError('Failed to load menu. Please try again.');
+        throw err; // Ensure Promise.all catches this
       });
 
     const fetchOrders = axiosInstance.get(`${process.env.REACT_APP_API_URL}/api/orders?tableNumber=${parsedTableNumber}&sessionToken=${sessionToken}`)
@@ -107,6 +108,7 @@ function Menu() {
       .catch(err => {
         console.error('Error fetching orders:', err.message);
         setError('Failed to load orders. Please try again.');
+        throw err; // Ensure Promise.all catches this
       });
 
     Promise.all([fetchMenu, fetchOrders])
@@ -115,7 +117,7 @@ function Menu() {
       })
       .catch(err => {
         console.error('Error in Promise.all:', err.message);
-        setError('Failed to load data. Please try again.');
+        setError('Failed to load menu or orders. Please try again.');
         setLoading(false);
       });
   }, [tableNumber, sessionToken, sessionLoading, navigate]);
