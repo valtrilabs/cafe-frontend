@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import QRCode from 'qrcode.react';
+import { QRCodeCanvas } from 'qrcode.react';
 import { v4 as uuid } from 'uuid';
 import { FaUtensils } from 'react-icons/fa';
 
@@ -107,7 +107,7 @@ function QRCodeGenerator() {
               <div key={tableId} className="bg-white rounded-lg shadow-md p-4 sm:p-6 text-center">
                 <h2 className="text-lg sm:text-xl font-semibold mb-2 sm:mb-4">Table {tableId}</h2>
                 <div className="flex justify-center mb-2 sm:mb-4">
-                  <QRCode value={qrCodeUrl} size={150} />
+                  <QRCodeCanvas value={qrCodeUrl} size={150} />
                 </div>
                 <p className="text-xs sm:text-sm text-gray-600 break-all">{qrCodeUrl}</p>
               </div>
