@@ -15,33 +15,33 @@ function Menu() {
 
   const location = useLocation();
   const navigate = useNavigate();
-  const tableNumber = new URLSearchParams(location.search).get('table') || 'Unknown';
-  const tokenFromUrl = new URLSearchParams(location.search).get('token');
+  const tableId = new URLSearchParams(location.search).get('table') || 'Unknown';
+  const sessionFromUrl = new URLSearchParams(location.search).get('session');
 
   const validateSession = async () => {
     try {
-      const storedToken = localStorage.getItem(`sessionToken_${tableNumber}`) || tokenFromUrl;
+      const storedToken = localStorage.getItem(`sessionToken_${tableId}`) || sessionFromUrl;
       if (!storedToken) {
-        navigate(`/qr-prompt?table=${tableNumber}`);
+        navigate(`/qr-prompt?table=${tableId}`);
         return false;
       }
 
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/sessions/validate`, {
-        params: { token: storedToken, tableNumber }
+      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/session/status`, {
+        params: { table: tableId, session: storedToken }
       });
-      if (response.data.valid) {
+      if (response.data.status === 'active') {
         setSessionToken(storedToken);
-        localStorage.setItem(`sessionToken_${tableNumber}`, storedToken);
+        localStorage.setItem(`sessionToken_${tableId}`, storedToken);
         return true;
       } else {
-        localStorage.removeItem(`sessionToken_${tableNumber}`);
-        navigate(`/qr-prompt?table=${tableNumber}`);
+        localStorage.removeItem(`sessionToken_${tableId}`);
+        navigate(`/qr-prompt?table=${tableId}`);
         return false;
       }
     } catch (err) {
       console.error('Session validation error:', err);
-      localStorage.removeItem(`sessionToken_${tableNumber}`);
-      navigate(`/qr-prompt?table=${tableNumber}`);
+      localStorage.removeItem(`sessionToken_${tableId}`);
+      navigate(`/qr-prompt?table=${tableId}`);
       return false;
     }
   };
@@ -140,26 +140,25 @@ function Menu() {
     setCart(cart.filter(cartItem => cartItem.itemId !== itemId));
   };
 
-  const placeOrder = () => {
-    axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, {
-      tableNumber: parseInt(tableNumber),
-      sessionToken,
-      items: cart.map(item => ({ itemId: item.itemId, quantity: item.quantity }))
-    })
-      .then(res => {
-        setOrderPlaced({
-          orderNumber: res.data.orderNumber,
-          items: cart,
-          total: cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
-          createdAt: new Date()
-        });
-        setCart([]);
-        setIsMiniCartOpen(false);
-      })
-      .catch(err => {
-        console.error('Error placing order:', err);
-        setError('Failed to place order. Please try again.');
+  const placeOrder = async () => {
+    try {
+      const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, {
+        tableId: parseInt(tableId),
+        sessionToken,
+        items: cart.map(item => ({ itemId: item.itemId, quantity: item.quantity }))
       });
+      setOrderPlaced({
+        orderNumber: response.data.orderNumber,
+        items: cart,
+        total: cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
+        createdAt: new Date()
+      });
+      setCart([]);
+      setIsMiniCartOpen(false);
+    } catch (err) {
+      console.error('Error placing order:', err);
+      setError(err.response?.data?.error || 'Failed to place order. Please try again.');
+    }
   };
 
   const totalPrice = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -175,7 +174,7 @@ function Menu() {
             Your order is being prepared. Please wait 10-15 minutes for fresh food, just for you!
           </p>
           <h3 className="text-lg font-semibold mb-2">Order Summary</h3>
-          <p className="text-gray-600 mb-2">Order #{orderPlaced.orderNumber} - Table {tableNumber}</p>
+          <p className="text-gray-600 mb-2">Order #{orderPlaced.orderNumber} - Table {tableId}</p>
           <p className="text-gray-600 mb-4">Placed: {orderPlaced.createdAt.toLocaleString()}</p>
           <ul className="text-left mb-4">
             {orderPlaced.items.map((item, index) => (
@@ -205,7 +204,7 @@ function Menu() {
       >
         <div className="container mx-auto p-2 sm:p-4 flex justify-between items-center">
           <h1 className="text-lg sm:text-2xl font-bold flex items-center">
-            <FaUtensils className="mr-2" style={{ color: '#fcd34d' }} /> GSaheb Cafe Menu - Table {tableNumber}
+            <FaUtensils className="mr-2" style={{ color: '#fcd34d' }} /> GSaheb Cafe Menu - Table {tableId}
           </h1>
           <div className="flex items-center space-x-2 sm:space-x-4">
             <span 
@@ -225,7 +224,10 @@ function Menu() {
           <button
             className="mt-2 px-3 sm:px-4 py-1 sm:py-2 rounded-lg text-white text-sm"
             style={{ backgroundColor: '#b45309' }}
-            onClick={fetchMenu}
+            onClick={() => {
+              setError(null);
+              fetchMenu();
+            }}
           >
             Retry
           </button>

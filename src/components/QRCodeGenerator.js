@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { QRCodeCanvas } from 'qrcode.react';
 import axios from 'axios';
+import { v4 as uuidv4 } from 'uuid';
 
 function QRCodeGenerator() {
   const baseUrl = process.env.REACT_APP_FRONTEND_URL || 'https://cafe-frontend-pi.vercel.app';
@@ -11,12 +12,14 @@ function QRCodeGenerator() {
       const tokens = {};
       for (let table = 1; table <= 6; table++) {
         try {
-          const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/sessions`, {
-            tableNumber: table
+          const sessionToken = uuidv4();
+          await axios.post(`${process.env.REACT_APP_API_URL}/api/session`, {
+            tableId: table,
+            sessionToken
           });
-          tokens[table] = response.data.token;
+          tokens[table] = sessionToken;
         } catch (err) {
-          console.error(`Error generating token for table ${table}:`, err);
+          console.error(`Error generating session for table ${table}:`, err);
         }
       }
       setTableTokens(tokens);
@@ -32,7 +35,7 @@ function QRCodeGenerator() {
           <div key={table} className="text-center">
             <h2 className="font-semibold">Table {table}</h2>
             {tableTokens[table] ? (
-              <QRCodeCanvas value={`${baseUrl}/order?table=${table}&token=${tableTokens[table]}`} />
+              <QRCodeCanvas value={`${baseUrl}/order?table=${table}&session=${tableTokens[table]}`} />
             ) : (
               <p>Loading QR code...</p>
             )}
