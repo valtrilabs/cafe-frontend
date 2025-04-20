@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useLocation } from 'react-router-dom';
-import { FaShoppingCart, FaUtensils, FaRupeeSign } from 'react-icons/fa';
+import { useLocation, useNavigate } from 'react-router-dom';
+import { FaShoppingCart, FaUtensils, FaRupeeSign, FaCheckCircle } from 'react-icons/fa';
 
 function Menu() {
   const [menuItems, setMenuItems] = useState([]);
@@ -10,9 +10,41 @@ function Menu() {
   const [isMiniCartOpen, setIsMiniCartOpen] = useState(false);
   const [error, setError] = useState(null);
   const [addedItemId, setAddedItemId] = useState(null);
+  const [sessionToken, setSessionToken] = useState(null);
+  const [orderPlaced, setOrderPlaced] = useState(null);
 
   const location = useLocation();
+  const navigate = useNavigate();
   const tableNumber = new URLSearchParams(location.search).get('table') || 'Unknown';
+  const tokenFromUrl = new URLSearchParams(location.search).get('token');
+
+  const validateSession = async () => {
+    try {
+      const storedToken = localStorage.getItem(`sessionToken_${tableNumber}`) || tokenFromUrl;
+      if (!storedToken) {
+        navigate(`/qr-prompt?table=${tableNumber}`);
+        return false;
+      }
+
+      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/sessions/validate`, {
+        params: { token: storedToken, tableNumber }
+      });
+      if (response.data.valid) {
+        setSessionToken(storedToken);
+        localStorage.setItem(`sessionToken_${tableNumber}`, storedToken);
+        return true;
+      } else {
+        localStorage.removeItem(`sessionToken_${tableNumber}`);
+        navigate(`/qr-prompt?table=${tableNumber}`);
+        return false;
+      }
+    } catch (err) {
+      console.error('Session validation error:', err);
+      localStorage.removeItem(`sessionToken_${tableNumber}`);
+      navigate(`/qr-prompt?table=${tableNumber}`);
+      return false;
+    }
+  };
 
   const fetchMenu = () => {
     axios.get(`${process.env.REACT_APP_API_URL}/api/menu`)
@@ -28,7 +60,13 @@ function Menu() {
   };
 
   useEffect(() => {
-    fetchMenu();
+    const initialize = async () => {
+      const isValid = await validateSession();
+      if (isValid) {
+        fetchMenu();
+      }
+    };
+    initialize();
   }, []);
 
   const categories = [
@@ -105,13 +143,18 @@ function Menu() {
   const placeOrder = () => {
     axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, {
       tableNumber: parseInt(tableNumber),
+      sessionToken,
       items: cart.map(item => ({ itemId: item.itemId, quantity: item.quantity }))
     })
       .then(res => {
-        alert('Congratulations, Your Order is placed successfully. Please wait 10-15 minutes until we prepare fresh food, just for you.');
+        setOrderPlaced({
+          orderNumber: res.data.orderNumber,
+          items: cart,
+          total: cart.reduce((sum, item) => sum + item.price * item.quantity, 0),
+          createdAt: new Date()
+        });
         setCart([]);
         setIsMiniCartOpen(false);
-        return res.data.orderNumber;
       })
       .catch(err => {
         console.error('Error placing order:', err);
@@ -121,6 +164,37 @@ function Menu() {
 
   const totalPrice = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+  if (orderPlaced) {
+    return (
+      <div className="min-h-screen bg-orange-50 flex items-center justify-center p-4">
+        <div className="bg-white rounded-lg shadow-lg p-6 max-w-md w-full text-center">
+          <FaCheckCircle className="text-green-500 text-4xl mb-4 mx-auto" />
+          <h2 className="text-2xl font-bold mb-2">Order Placed Successfully!</h2>
+          <p className="text-gray-600 mb-4">
+            Your order is being prepared. Please wait 10-15 minutes for fresh food, just for you!
+          </p>
+          <h3 className="text-lg font-semibold mb-2">Order Summary</h3>
+          <p className="text-gray-600 mb-2">Order #{orderPlaced.orderNumber} - Table {tableNumber}</p>
+          <p className="text-gray-600 mb-4">Placed: {orderPlaced.createdAt.toLocaleString()}</p>
+          <ul className="text-left mb-4">
+            {orderPlaced.items.map((item, index) => (
+              <li key={index} className="text-gray-600">
+                {item.quantity} x {item.name} (<FaRupeeSign className="inline mr-1" />
+                {(item.quantity * item.price).toFixed(2)})
+              </li>
+            ))}
+          </ul>
+          <p className="font-bold flex items-center justify-center">
+            Total: <FaRupeeSign className="ml-1 mr-1" />{orderPlaced.total.toFixed(2)}
+          </p>
+          <p className="text-gray-500 mt-4 text-sm">
+            To place another order, please scan the QR code again.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-orange-50 pb-32">
