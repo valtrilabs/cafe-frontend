@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import { FaShoppingCart, FaUtensils, FaRupeeSign } from 'react-icons/fa';
 
 function Menu() {
@@ -10,26 +10,75 @@ function Menu() {
   const [isMiniCartOpen, setIsMiniCartOpen] = useState(false);
   const [error, setError] = useState(null);
   const [addedItemId, setAddedItemId] = useState(null);
+  const [orderSummary, setOrderSummary] = useState(null);
+  const [sessionValid, setSessionValid] = useState(true);
+  const [sessionMessage, setSessionMessage] = useState('');
 
   const location = useLocation();
-  const tableNumber = new URLSearchParams(location.search).get('table') || 'Unknown';
+  const navigate = useNavigate();
+  const queryParams = new URLSearchParams(location.search);
+  const tableNumber = queryParams.get('table') || 'Unknown';
+  const token = queryParams.get('token');
 
-  const fetchMenu = () => {
-    axios.get(`${process.env.REACT_APP_API_URL}/api/menu`)
-      .then(res => {
-        console.log('Menu items fetched:', res.data);
-        setMenuItems(res.data);
-        setError(null);
-      })
-      .catch(err => {
-        console.error('Error fetching menu:', err);
-        setError('Failed to load menu. Please try again.');
+  const validateSession = async () => {
+    try {
+      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/sessions/validate`, {
+        params: { token }
       });
+      setSessionValid(true);
+      setSessionMessage('');
+      return response.data;
+    } catch (err) {
+      console.error('Session validation error:', err);
+      setSessionValid(false);
+      setSessionMessage(err.response?.data?.error || 'Invalid session. Please scan the QR code again.');
+      navigate('/scan-qr', { state: { message: err.response?.data?.error } });
+      return null;
+    }
+  };
+
+  const fetchMenu = async () => {
+    try {
+      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/menu`, {
+        headers: { 'x-session-token': token }
+      });
+      console.log('Menu items fetched:', response.data);
+      setMenuItems(response.data);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching menu:', err);
+      setError('Failed to load menu. Please try again.');
+    }
   };
 
   useEffect(() => {
-    fetchMenu();
-  }, []);
+    if (!token) {
+      setSessionValid(false);
+      setSessionMessage('No session token provided. Please scan the QR code.');
+      navigate('/scan-qr', { state: { message: 'Please scan the QR code to access the menu.' } });
+      return;
+    }
+
+    validateSession().then(() => {
+      if (sessionValid) {
+        fetchMenu();
+      }
+    });
+
+    // Poll session status every 10 seconds
+    const interval = setInterval(async () => {
+      const result = await validateSession();
+      if (!result) {
+        setSessionValid(false);
+        setSessionMessage('Another person has scanned the QR code from your table. Please close your browser tab.');
+        navigate('/scan-qr', {
+          state: { message: 'Another person has scanned the QR code from your table. Please close your browser tab.' }
+        });
+      }
+    }, 10000);
+
+    return () => clearInterval(interval);
+  }, [token, sessionValid, navigate]);
 
   const categories = [
     { name: 'All', icon: '🌟' },
@@ -102,25 +151,83 @@ function Menu() {
     setCart(cart.filter(cartItem => cartItem.itemId !== itemId));
   };
 
-  const placeOrder = () => {
-    axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, {
-      tableNumber: parseInt(tableNumber),
-      items: cart.map(item => ({ itemId: item.itemId, quantity: item.quantity }))
-    })
-      .then(res => {
-        alert('Congratulations, Your Order is placed successfully. Please wait 10-15 minutes until we prepare fresh food, just for you.');
-        setCart([]);
-        setIsMiniCartOpen(false);
-        return res.data.orderNumber;
-      })
-      .catch(err => {
-        console.error('Error placing order:', err);
-        setError('Failed to place order. Please try again.');
+  const placeOrder = async () => {
+    try {
+      const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, {
+        tableNumber: parseInt(tableNumber),
+        items: cart.map(item => ({ itemId: item.itemId, quantity: item.quantity })),
+        token
+      }, {
+        headers: { 'x-session-token': token }
       });
+      setOrderSummary({
+        orderNumber: response.data.orderNumber,
+        items: cart,
+        total: cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
+      });
+      setCart([]);
+      setIsMiniCartOpen(false);
+    } catch (err) {
+      console.error('Error placing order:', err);
+      setError('Failed to place order. Please try again.');
+    }
+  };
+
+  const startNewOrder = () => {
+    setOrderSummary(null);
+    setSessionValid(false);
+    navigate('/scan-qr', { state: { message: 'Please scan the QR code to start a new order.' } });
   };
 
   const totalPrice = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
+
+  if (!sessionValid) {
+    return null; // Redirect handled by useEffect
+  }
+
+  if (orderSummary) {
+    return (
+      <div className="min-h-screen bg-orange-50 p-4">
+        <header className="sticky top-0 shadow-lg z-50 border-b-2 border-amber-900" style={{ backgroundColor: '#92400e', color: '#ffffff' }}>
+          <div className="container mx-auto p-2 sm:p-4 flex justify-between items-center">
+            <h1 className="text-lg sm:text-2xl font-bold flex items-center">
+              <FaUtensils className="mr-2" style={{ color: '#fcd34d' }} /> GSaheb Cafe - Table {tableNumber}
+            </h1>
+          </div>
+        </header>
+        <div className="container mx-auto p-4">
+          <h2 className="text-2xl font-bold mb-4">Order Summary</h2>
+          <p className="text-gray-600 mb-4">Your order #{orderSummary.orderNumber} is getting prepared. Please wait 10-15 minutes.</p>
+          <div className="bg-white rounded-lg shadow-md p-4">
+            <h3 className="text-lg font-semibold mb-2">Ordered Items</h3>
+            <ul className="space-y-2">
+              {orderSummary.items.map(item => (
+                <li key={item.itemId} className="flex items-center">
+                  <img src={item.image} alt={item.name} className="w-12 h-12 object-cover rounded mr-3" />
+                  <div className="flex-1">
+                    <p className="text-sm font-medium">{item.name}</p>
+                    <p className="text-sm text-gray-600">{item.quantity} x <FaRupeeSign className="inline mr-1" />{item.price.toFixed(2)}</p>
+                  </div>
+                  <p className="text-sm font-semibold"><FaRupeeSign className="inline mr-1" />{(item.quantity * item.price).toFixed(2)}</p>
+                </li>
+              ))}
+            </ul>
+            <p className="mt-4 text-lg font-bold flex items-center">
+              Total: <FaRupeeSign className="ml-1 mr-1" />{orderSummary.total.toFixed(2)}
+            </p>
+          </div>
+          <button
+            className="mt-4 w-full sm:w-auto px-4 py-2 rounded-lg text-white flex items-center justify-center"
+            style={{ backgroundColor: '#b45309' }}
+            onClick={startNewOrder}
+          >
+            <FaUtensils className="mr-2" /> Start New Order
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-orange-50 pb-32">
@@ -167,7 +274,7 @@ function Menu() {
             {categories.map(category => (
               <button
                 key={category.name}
-                className={`flex items-center px-3 sm:px-4 py-1 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
+                className={`flex items-center px-3を使0 sm:px-4 py-1 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
                   selectedCategory === category.name
                     ? 'shadow-md hover:bg-amber-700'
                     : 'hover:bg-amber-300'
