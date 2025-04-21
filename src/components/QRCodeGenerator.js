@@ -1,6 +1,8 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-import QRCodeCanvas from 'qrcode.react';
+// import QRCode from 'qrcode.react';
+import { QRCodeCanvas } from 'qrcode.react';
+
 
 function QRCodeGenerator() {
   const [tokens, setTokens] = useState({});
