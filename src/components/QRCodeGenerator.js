@@ -1,75 +1,46 @@
-import React, { useState, useEffect } from 'react';
-import axios from 'axios';
-import { QRCodeCanvas } from 'qrcode.react';
+import { useState } from 'react';
+     import axios from 'axios';
+     import QRCode from 'qrcode.react';
 
-function QRCodeGenerator() {
-  const [qrCodes, setQRCodes] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
-  const baseUrl = process.env.REACT_APP_FRONTEND_URL || 'https://cafe-frontend-pi.vercel.app';
+     function QRCodeGenerator() {
+       const [tokens, setTokens] = useState({});
+       const [error, setError] = useState(null);
 
-  useEffect(() => {
-    const fetchTokens = async () => {
-      try {
-        setLoading(true);
-        setError(null);
-        console.log('Fetching tokens from:', process.env.REACT_APP_API_URL);
-        const tables = [1, 2, 3, 4, 5, 6];
-        const codes = await Promise.all(
-          tables.map(async (table) => {
-            try {
-              const res = await axios.post(`${process.env.REACT_APP_API_URL}/api/sessions`, { tableNumber: table });
-              console.log(`Table ${table} token:`, res.data.token);
-              return {
-                table,
-                url: `${baseUrl}/order?table=${table}&token=${res.data.token}`,
-              };
-            } catch (err) {
-              console.error(`Error generating token for table ${table}:`, err.response?.data || err.message);
-              throw err;
-            }
-          })
-        );
-        setQRCodes(codes);
-      } catch (err) {
-        console.error('Error generating QR codes:', err);
-        setError('Failed to generate QR codes. Please try again or contact support.');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchTokens();
-  }, []);
+       const fetchTokens = async () => {
+         try {
+           console.log('Fetching tokens from: https://cafe-backend-ay2n.onrender.com');
+           const promises = [1, 2, 3, 4, 5, 6].map(table =>
+             axios.post('https://cafe-backend-ay2n.onrender.com/api/sessions', { tableNumber: table })
+           );
+           const responses = await Promise.all(promises);
+           const newTokens = responses.reduce((acc, res, index) => {
+             acc[index + 1] = res.data.token;
+             console.log(`Table ${index + 1} token: ${res.data.token}`);
+             return acc;
+           }, {});
+           setTokens(newTokens);
+           setError(null);
+         } catch (error) {
+           console.error('Error fetching tokens:', error);
+           setError('Failed to generate QR codes. Please try again.');
+         }
+       };
 
-  return (
-    <div className="container mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">QR Codes for Tables</h1>
-      {loading ? (
-        <p className="text-gray-600">Generating QR codes...</p>
-      ) : error ? (
-        <div className="text-red-600">
-          <p>{error}</p>
-          <button
-            className="mt-2 px-4 py-2 bg-orange-500 text-white rounded"
-            onClick={() => window.location.reload()}
-          >
-            Retry
-          </button>
-        </div>
-      ) : qrCodes.length === 0 ? (
-        <p className="text-gray-600">No QR codes generated. Please try again.</p>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {qrCodes.map(({ table, url }) => (
-            <div key={table} className="text-center">
-              <h2 className="font-semibold">Table {table}</h2>
-              <QRCodeCanvas value={url} size={150} />
-            </div>
-          ))}
-        </div>
-      )}
-    </div>
-  );
-}
+       return (
+         <div>
+           <h2>QR Codes for Tables</h2>
+           <button onClick={fetchTokens}>Refresh QR Codes</button>
+           {error && <div style={{ color: 'red' }}>{error}</div>}
+           <div style={{ display: 'flex', flexWrap: 'wrap' }}>
+             {Object.entries(tokens).map(([table, token]) => (
+               <div key={table} style={{ margin: '20px' }}>
+                 <h3>Table {table}</h3>
+                 <QRCode value={`https://cafe-frontend-pi.vercel.app/order?table=${table}&token=${token}`} />
+               </div>
+             ))}
+           </div>
+         </div>
+       );
+     }
 
-export default QRCodeGenerator;
+     export default QRCodeGenerator;
