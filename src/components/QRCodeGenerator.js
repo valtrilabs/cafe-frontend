@@ -21,7 +21,7 @@ function QRCodeGenerator() {
       setTokens(newTokens);
       setError(null);
     } catch (error) {
-      console.error('Error fetching tokens:', error);
+      console.error('Error fetching tokens:', error.response?.data || error.message);
       setError('Failed to generate QR codes. Please try again.');
     }
   };

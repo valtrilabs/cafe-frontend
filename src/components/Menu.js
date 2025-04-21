@@ -22,14 +22,16 @@ function Menu() {
 
   const validateSession = async (sessionToken) => {
     try {
+      console.log(`Validating session with token: ${sessionToken}`);
       const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/sessions/validate`, {
         params: { token: sessionToken }
       });
+      console.log(`Session validated for table ${response.data.tableNumber}`);
       setSessionValid(true);
       setSessionMessage('');
       return response.data;
     } catch (err) {
-      console.error('Session validation error:', err);
+      console.error('Session validation error:', err.response?.data || err.message);
       setSessionValid(false);
       setSessionMessage(err.response?.data?.error || 'Invalid session. Please scan the QR code again.');
       navigate('/scan-qr', { state: { message: err.response?.data?.error } });
@@ -39,6 +41,7 @@ function Menu() {
 
   const fetchMenu = async (sessionToken) => {
     try {
+      console.log(`Fetching menu with token: ${sessionToken}`);
       const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/menu`, {
         headers: { 'x-session-token': sessionToken }
       });
@@ -46,19 +49,21 @@ function Menu() {
       setMenuItems(response.data);
       setError(null);
     } catch (err) {
-      console.error('Error fetching menu:', err);
+      console.error('Error fetching menu:', err.response?.data || err.message);
       setError('Failed to load menu. Please try again.');
     }
   };
 
-  const createNewSession = async () => {
+  const createNewSession = async (tableNum) => {
     try {
+      console.log(`Creating new session for table: ${tableNum}`);
       const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/sessions`, {
-        tableNumber: Number(tableNumber)
+        tableNumber: Number(tableNum)
       });
+      console.log(`New session created: ${response.data.token}`);
       return response.data.token;
     } catch (err) {
-      console.error('Error creating session:', err);
+      console.error('Error creating session:', err.response?.data || err.message);
       setSessionValid(false);
       setSessionMessage('Failed to create session. Please scan the QR code.');
       navigate('/scan-qr', { state: { message: 'Failed to create session. Please scan the QR code.' } });
@@ -68,7 +73,9 @@ function Menu() {
 
   useEffect(() => {
     const initializeSession = async () => {
+      console.log(`Initializing session. Table: ${tableNumber}, Token: ${token}`);
       if (!tableNumber || !Number(tableNumber) || Number(tableNumber) < 1) {
+        console.error('Invalid table number:', tableNumber);
         setSessionValid(false);
         setSessionMessage('Invalid table number. Please scan the QR code.');
         navigate('/scan-qr', { state: { message: 'Invalid table number. Please scan the QR code.' } });
@@ -77,8 +84,9 @@ function Menu() {
 
       let sessionToken = token;
       if (!token) {
-        sessionToken = await createNewSession();
+        sessionToken = await createNewSession(tableNumber);
         if (sessionToken) {
+          console.log(`Redirecting to /order?table=${tableNumber}&token=${sessionToken}`);
           navigate(`/order?table=${tableNumber}&token=${sessionToken}`, { replace: true });
         }
         return;
@@ -92,27 +100,28 @@ function Menu() {
 
     initializeSession();
 
-    // Poll session status every 10 seconds
-    const interval = setInterval(async () => {
-      if (token) {
-        const result = await validateSession(token);
-        if (!result) {
-          setSessionValid(false);
-          setSessionMessage('Another person has scanned the QR code from your table. Please close your browser tab.');
-          navigate('/scan-qr', {
-            state: { message: 'Another person has scanned the QR code from your table. Please close your browser tab.' }
-          });
-        }
-      }
-    }, 10000);
-
-    return () => clearInterval(interval);
+    // Temporarily disable polling to rule out race conditions
+    // const interval = setInterval(async () => {
+    //   if (token) {
+    //     const result = await validateSession(token);
+    //     if (!result) {
+    //       setSessionValid(false);
+    //       setSessionMessage('Another person has scanned the QR code from your table.');
+    //       navigate('/scan-qr', {
+    //         state: { message: 'Another person has scanned the QR code from your table.' }
+    //       });
+    //     }
+    //   }
+    // }, 10000);
+    // return () => clearInterval(interval);
   }, [tableNumber, token, navigate]);
 
   const startNewOrder = async () => {
+    console.log(`Starting new order for table: ${tableNumber}`);
     setOrderSummary(null);
-    const newToken = await createNewSession();
+    const newToken = await createNewSession(tableNumber);
     if (newToken) {
+      console.log(`Redirecting to new order: /order?table=${tableNumber}&token=${newToken}`);
       navigate(`/order?table=${tableNumber}&token=${newToken}`);
     }
   };
@@ -190,6 +199,7 @@ function Menu() {
 
   const placeOrder = async () => {
     try {
+      console.log('Placing order for table:', tableNumber);
       const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, {
         tableNumber: parseInt(tableNumber),
         items: cart.map(item => ({ itemId: item.itemId, quantity: item.quantity })),
@@ -197,6 +207,7 @@ function Menu() {
       }, {
         headers: { 'x-session-token': token }
       });
+      console.log('Order placed:', response.data);
       setOrderSummary({
         orderNumber: response.data.orderNumber,
         items: cart,
@@ -205,7 +216,7 @@ function Menu() {
       setCart([]);
       setIsMiniCartOpen(false);
     } catch (err) {
-      console.error('Error placing order:', err);
+      console.error('Error placing order:', err.response?.data || err.message);
       setError('Failed to place order. Please try again.');
     }
   };
