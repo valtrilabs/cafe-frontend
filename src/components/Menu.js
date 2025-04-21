@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { FaShoppingCart, FaUtensils, FaRupeeSign, FaQrcode } from 'react-icons/fa';
-import QRCode from 'qrcode.react';
+import { QRCodeCanvas } from 'qrcode.react';
 
 function Menu() {
   const [menuItems, setMenuItems] = useState([]);
@@ -310,7 +310,7 @@ function Menu() {
           {showQrCode && qrToken && (
             <div className="mt-4 bg-white rounded-lg shadow-md p-4 text-center">
               <h3 className="text-lg font-semibold mb-2">Scan to Continue Ordering</h3>
-              <QRCode value={`https://cafe-frontend-pi.vercel.app/order?table=${tableNumber}&token=${qrToken}`} />
+              <QRCodeCanvas value={`https://cafe-frontend-pi.vercel.app/order?table=${tableNumber}&token=${qrToken}`} />
             </div>
           )}
         </div>

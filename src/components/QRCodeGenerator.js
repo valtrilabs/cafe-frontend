@@ -1,8 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
-// import QRCode from 'qrcode.react';
 import { QRCodeCanvas } from 'qrcode.react';
-
 
 function QRCodeGenerator() {
   const [tokens, setTokens] = useState({});
@@ -43,7 +41,7 @@ function QRCodeGenerator() {
         {Object.entries(tokens).map(([table, token]) => (
           <div key={table} style={{ margin: '20px' }}>
             <h3>Table {table}</h3>
-            <QRCode value={`https://cafe-frontend-pi.vercel.app/order?table=${table}&token=${token}`} />
+            <QRCodeCanvas value={`https://cafe-frontend-pi.vercel.app/order?table=${table}&token=${token}`} />
           </div>
         ))}
       </div>
