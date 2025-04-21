@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { FaShoppingCart, FaUtensils, FaRupeeSign, FaQrcode } from 'react-icons/fa';
-import { QRCodeCanvas } from 'qrcode.react';
+import { FaShoppingCart, FaUtensils, FaRupeeSign } from 'react-icons/fa';
 
 function Menu() {
   const [menuItems, setMenuItems] = useState([]);
@@ -14,8 +13,7 @@ function Menu() {
   const [orderSummary, setOrderSummary] = useState(null);
   const [sessionValid, setSessionValid] = useState(true);
   const [sessionMessage, setSessionMessage] = useState('');
-  const [qrToken, setQrToken] = useState(null);
-  const [showQrCode, setShowQrCode] = useState(false);
+  const [isStartingNewOrder, setIsStartingNewOrder] = useState(false); // Debounce state
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -83,7 +81,7 @@ function Menu() {
     const initializeSession = async () => {
       console.log(`Initializing session. Table: ${tableNumber}, Token: ${token}`);
       const tableNum = Number(tableNumber);
-      if (isNaN(tableNum) || tableNum < 1) {
+      if (isNaN(tableNum) || tableNum < 1 || tableNum > 30) {
         console.error('Invalid table number:', tableNumber);
         setSessionValid(false);
         setSessionMessage('Invalid table number. Please scan the QR code.');
@@ -123,15 +121,20 @@ function Menu() {
   }, [tableNumber, token, navigate, orderSummary]);
 
   const startNewOrder = async () => {
+    if (isStartingNewOrder) {
+      console.log('Start New Order is debounced. Please wait.');
+      return;
+    }
+    setIsStartingNewOrder(true);
     console.log(`Starting new order for table: ${tableNumber}`);
     setOrderSummary(null);
-    setShowQrCode(false);
     const tableNum = Number(tableNumber);
-    if (isNaN(tableNum) || tableNum < 1) {
+    if (isNaN(tableNum) || tableNum < 1 || tableNum > 30) {
       console.error('Invalid table number for startNewOrder:', tableNumber);
       setSessionValid(false);
       setSessionMessage('Invalid table number. Please scan the QR code.');
       navigate('/scan-qr', { state: { message: 'Invalid table number. Please scan the QR code.' } });
+      setIsStartingNewOrder(false);
       return;
     }
     const newToken = await createNewSession(tableNum);
@@ -139,23 +142,7 @@ function Menu() {
       console.log(`Redirecting to new order: /order?table=${tableNum}&token=${newToken}`);
       navigate(`/order?table=${tableNum}&token=${newToken}`);
     }
-  };
-
-  const generateQrCode = async () => {
-    console.log(`Generating QR code for table: ${tableNumber}`);
-    const tableNum = Number(tableNumber);
-    if (isNaN(tableNum) || tableNum < 1) {
-      console.error('Invalid table number for QR code:', tableNumber);
-      setSessionValid(false);
-      setSessionMessage('Invalid table number. Please scan the QR code.');
-      navigate('/scan-qr', { state: { message: 'Invalid table number. Please scan the QR code.' } });
-      return;
-    }
-    const newToken = await createNewSession(tableNum);
-    if (newToken) {
-      setQrToken(newToken);
-      setShowQrCode(true);
-    }
+    setTimeout(() => setIsStartingNewOrder(false), 5000); // 5-second debounce
   };
 
   const categories = [
@@ -291,28 +278,16 @@ function Menu() {
               Total: <FaRupeeSign className="ml-1 mr-1" />{orderSummary.total.toFixed(2)}
             </p>
           </div>
-          <div className="mt-4 flex flex-col sm:flex-row gap-4">
+          <div className="mt-4">
             <button
-              className="w-full sm:w-auto px-4 py-2 rounded-lg text-white flex items-center justify-center"
-              style={{ backgroundColor: '#b45309' }}
+              className="w-full sm:w-auto px-4 py-2 rounded-lg text-white flex items-center justify-center disabled:bg-gray-400"
+              style={{ backgroundColor: isStartingNewOrder ? '#9ca3af' : '#b45309' }}
               onClick={startNewOrder}
+              disabled={isStartingNewOrder}
             >
-              <FaUtensils className="mr-2" /> Start New Order
-            </button>
-            <button
-              className="w-full sm:w-auto px-4 py-2 rounded-lg text-white flex items-center justify-center"
-              style={{ backgroundColor: '#16a34a' }}
-              onClick={generateQrCode}
-            >
-              <FaQrcode className="mr-2" /> Scan QR Code Again
+              <FaUtensils className="mr-2" /> {isStartingNewOrder ? 'Please Wait...' : 'Start New Order'}
             </button>
           </div>
-          {showQrCode && qrToken && (
-            <div className="mt-4 bg-white rounded-lg shadow-md p-4 text-center">
-              <h3 className="text-lg font-semibold mb-2">Scan to Continue Ordering</h3>
-              <QRCodeCanvas value={`https://cafe-frontend-pi.vercel.app/order?table=${tableNumber}&token=${qrToken}`} />
-            </div>
-          )}
         </div>
       </div>
     );
