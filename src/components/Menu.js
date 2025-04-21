@@ -54,27 +54,33 @@ function Menu() {
     }
   };
 
-  const createNewSession = async (tableNum) => {
-    try {
-      console.log(`Creating new session for table: ${tableNum}`);
-      const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/sessions`, {
-        tableNumber: Number(tableNum)
-      });
-      console.log(`New session created: ${response.data.token}`);
-      return response.data.token;
-    } catch (err) {
-      console.error('Error creating session:', err.response?.data || err.message);
-      setSessionValid(false);
-      setSessionMessage('Failed to create session. Please scan the QR code.');
-      navigate('/scan-qr', { state: { message: 'Failed to create session. Please scan the QR code.' } });
-      return null;
+  const createNewSession = async (tableNum, retries = 3) => {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        console.log(`Attempt ${attempt}: Creating new session for table: ${tableNum}`);
+        const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/sessions`, {
+          tableNumber: Number(tableNum)
+        });
+        console.log(`New session created: ${response.data.token}`);
+        return response.data.token;
+      } catch (err) {
+        console.error(`Attempt ${attempt}: Error creating session:`, err.response?.data || err.message);
+        if (attempt === retries) {
+          setSessionValid(false);
+          setSessionMessage('Failed to create session after retries. Please scan the QR code.');
+          navigate('/scan-qr', { state: { message: 'Failed to create session. Please scan the QR code.' } });
+          return null;
+        }
+        await new Promise(resolve => setTimeout(resolve, 1000)); // Wait 1s before retry
+      }
     }
   };
 
   useEffect(() => {
     const initializeSession = async () => {
       console.log(`Initializing session. Table: ${tableNumber}, Token: ${token}`);
-      if (!tableNumber || !Number(tableNumber) || Number(tableNumber) < 1) {
+      const tableNum = Number(tableNumber);
+      if (isNaN(tableNum) || tableNum < 1) {
         console.error('Invalid table number:', tableNumber);
         setSessionValid(false);
         setSessionMessage('Invalid table number. Please scan the QR code.');
@@ -84,10 +90,10 @@ function Menu() {
 
       let sessionToken = token;
       if (!token) {
-        sessionToken = await createNewSession(tableNumber);
+        sessionToken = await createNewSession(tableNum);
         if (sessionToken) {
-          console.log(`Redirecting to /order?table=${tableNumber}&token=${sessionToken}`);
-          navigate(`/order?table=${tableNumber}&token=${sessionToken}`, { replace: true });
+          console.log(`Redirecting to /order?table=${tableNum}&token=${sessionToken}`);
+          navigate(`/order?table=${tableNum}&token=${sessionToken}`, { replace: true });
         }
         return;
       }
@@ -99,30 +105,23 @@ function Menu() {
     };
 
     initializeSession();
-
-    // Temporarily disable polling to rule out race conditions
-    // const interval = setInterval(async () => {
-    //   if (token) {
-    //     const result = await validateSession(token);
-    //     if (!result) {
-    //       setSessionValid(false);
-    //       setSessionMessage('Another person has scanned the QR code from your table.');
-    //       navigate('/scan-qr', {
-    //         state: { message: 'Another person has scanned the QR code from your table.' }
-    //       });
-    //     }
-    //   }
-    // }, 10000);
-    // return () => clearInterval(interval);
   }, [tableNumber, token, navigate]);
 
   const startNewOrder = async () => {
     console.log(`Starting new order for table: ${tableNumber}`);
     setOrderSummary(null);
-    const newToken = await createNewSession(tableNumber);
+    const tableNum = Number(tableNumber);
+    if (isNaN(tableNum) || tableNum < 1) {
+      console.error('Invalid table number for startNewOrder:', tableNumber);
+      setSessionValid(false);
+      setSessionMessage('Invalid table number. Please scan the QR code.');
+      navigate('/scan-qr', { state: { message: 'Invalid table number. Please scan the QR code.' } });
+      return;
+    }
+    const newToken = await createNewSession(tableNum);
     if (newToken) {
-      console.log(`Redirecting to new order: /order?table=${tableNumber}&token=${newToken}`);
-      navigate(`/order?table=${tableNumber}&token=${newToken}`);
+      console.log(`Redirecting to new order: /order?table=${tableNum}&token=${newToken}`);
+      navigate(`/order?table=${tableNum}&token=${newToken}`);
     }
   };
 
