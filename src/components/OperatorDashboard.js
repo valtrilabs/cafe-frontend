@@ -1,7 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, PieChart, Pie, Cell, ResponsiveContainer } from 'recharts';
-import { FaPlus, FaEdit, FaTrash, FaCheck, FaTimes, FaChartBar, FaUtensils, FaList, FaClock, FaHamburger, FaArrowUp, FaArrowDown, FaRupeeSign, FaPrint } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaCheck, FaTimes, FaUtensils, FaList, FaClock, FaHamburger, FaPrint } from 'react-icons/fa';
 
 function OperatorDashboard() {
   const [orders, setOrders] = useState([]);
@@ -18,27 +17,19 @@ function OperatorDashboard() {
     isAvailable: true,
     image: null,
   });
-  const [analytics, setAnalytics] = useState({
-    revenue: { today: 0, week: 0, month: 0 },
-    orderCount: { total: 0, pending: 0, prepared: 0, completed: 0 },
-    topItems: [],
-    slowItems: [],
-    peakHours: [],
-    categories: []
-  });
 
   const fetchOrders = async (tab) => {
     try {
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
       const url = tab === 'Today'
-        ? `${process.env.REACT_APP_API_URL}/api/orders?dateFrom=${todayStart.toISOString()}&dateTo=${now.toISOString()}`
+        ? `https://cafe-backend-ay2n.onrender.com/api/orders?dateFrom=${todayStart.toISOString()}&dateTo=${now.toISOString()}`
         : tab === 'Past Orders'
-        ? `${process.env.REACT_APP_API_URL}/api/orders?dateTo=${todayStart.toISOString()}`
-        : `${process.env.REACT_APP_API_URL}/api/orders?status=${tab.toLowerCase()}`;
+        ? `https://cafe-backend-ay2n.onrender.com/api/orders?dateTo=${todayStart.toISOString()}`
+        : `https://cafe-backend-ay2n.onrender.com/api/orders?status=${tab.toLowerCase()}`;
       const res = await axios.get(url);
       console.log('Orders fetched:', res.data);
-      const newOrders = res.data;
+      const newOrders = res.data.filter(order => order.tableNumber != null); // Filter invalid orders
       const sortedOrders = newOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       if (orders.length > 0) {
         const currentIds = new Set(orders.map(o => o._id));
@@ -66,7 +57,7 @@ function OperatorDashboard() {
 
   const fetchMenuItems = async () => {
     try {
-      const res = await axios.get(`${process.env.REACT_APP_API_URL}/api/menu`);
+      const res = await axios.get('https://cafe-backend-ay2n.onrender.com/api/menu');
       console.log('Menu items fetched:', res.data);
       setMenuItems(res.data);
       setError(null);
@@ -76,32 +67,18 @@ function OperatorDashboard() {
     }
   };
 
-  const fetchAnalytics = async () => {
-    try {
-      const res = await axios.get(`${process.env.REACT_APP_API_URL}/api/orders/analytics`);
-      console.log('Analytics fetched:', res.data);
-      setAnalytics(res.data);
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching analytics:', err);
-      setError('Failed to load analytics.');
-    }
-  };
-
   useEffect(() => {
     fetchOrders('Today');
     fetchMenuItems();
-    fetchAnalytics();
     const interval = setInterval(() => {
       fetchOrders(activeTab === 'Today' ? 'Today' : activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
-      if (activeTab === 'Analytics') fetchAnalytics();
     }, 30000);
     return () => clearInterval(interval);
   }, [activeTab]);
 
   const handleStatusUpdate = async (orderId, status) => {
     try {
-      await axios.put(`${process.env.REACT_APP_API_URL}/api/orders/${orderId}`, { status });
+      await axios.put(`https://cafe-backend-ay2n.onrender.com/api/orders/${orderId}`, { status });
       await fetchOrders(activeTab === 'Today' ? 'Today' : activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
       setError(null);
     } catch (err) {
@@ -127,7 +104,7 @@ function OperatorDashboard() {
 
   const handleSaveEdit = async () => {
     try {
-      await axios.put(`${process.env.REACT_APP_API_URL}/api/orders/${editingOrder._id}`, {
+      await axios.put(`https://cafe-backend-ay2n.onrender.com/api/orders/${editingOrder._id}`, {
         tableNumber: editingOrder.tableNumber,
         items: editingOrder.items.map(item => ({
           itemId: item.itemId,
@@ -147,7 +124,7 @@ function OperatorDashboard() {
   const handleCancelOrder = async (orderId) => {
     if (window.confirm('Are you sure you want to cancel this order?')) {
       try {
-        await axios.delete(`${process.env.REACT_APP_API_URL}/api/orders/${orderId}`);
+        await axios.delete(`https://cafe-backend-ay2n.onrender.com/api/orders/${orderId}`);
         await fetchOrders(activeTab === 'Today' ? 'Today' : activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
         setError(null);
       } catch (err) {
@@ -241,7 +218,7 @@ function OperatorDashboard() {
       if (newItem.image) {
         formData.append('image', newItem.image);
       }
-      await axios.post(`${process.env.REACT_APP_API_URL}/api/menu`, formData, {
+      await axios.post('https://cafe-backend-ay2n.onrender.com/api/menu', formData, {
         headers: { 'Content-Type': 'multipart/form-data' },
       });
       await fetchMenuItems();
@@ -263,7 +240,7 @@ function OperatorDashboard() {
   const handleDeleteMenuItem = async (itemId) => {
     if (window.confirm('Are you sure you want to delete this menu item?')) {
       try {
-        await axios.delete(`${process.env.REACT_APP_API_URL}/api/menu/${itemId}`);
+        await axios.delete(`https://cafe-backend-ay2n.onrender.com/api/menu/${itemId}`);
         await fetchMenuItems();
         setError(null);
       } catch (err) {
@@ -275,7 +252,7 @@ function OperatorDashboard() {
 
   const handleToggleAvailability = async (itemId, isAvailable) => {
     try {
-      await axios.put(`${process.env.REACT_APP_API_URL}/api/menu/${itemId}`, { isAvailable: !isAvailable });
+      await axios.put(`https://cafe-backend-ay2n.onrender.com/api/menu/${itemId}`, { isAvailable: !isAvailable });
       await fetchMenuItems();
       setError(null);
     } catch (err) {
@@ -287,8 +264,6 @@ function OperatorDashboard() {
   const filteredOrders = orders.filter(order => 
     activeTab === 'Past Orders' || activeTab === 'Today' ? true : order.status === activeTab
   );
-
-  const COLORS = ['#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#8b5cf6'];
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 sm:p-6">
@@ -308,8 +283,7 @@ function OperatorDashboard() {
           { name: 'Prepared', icon: <FaCheck /> },
           { name: 'Completed', icon: <FaCheck /> },
           { name: 'Past Orders', icon: <FaList /> },
-          { name: 'Menu Management', icon: <FaHamburger /> },
-          { name: 'Analytics', icon: <FaChartBar /> },
+          { name: 'Menu Management', icon: <FaHamburger /> }
         ].map(tab => (
           <button
             key={tab.name}
@@ -327,168 +301,6 @@ function OperatorDashboard() {
           </button>
         ))}
       </div>
-
-      {/* Analytics Tab */}
-      {activeTab === 'Analytics' && (
-        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
-          <h2 className="text-xl sm:text-2xl font-semibold mb-4 flex items-center text-gray-800">
-            <FaChartBar className="mr-2 text-amber-600" /> Analytics
-          </h2>
-          
-          {/* Revenue */}
-          <div className="mb-8 border-b-2 border-gray-200 pb-6">
-            <h3 className="text-lg font-medium mb-4 flex items-center text-gray-700">
-              <FaRupeeSign className="mr-2" /> Revenue
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-              {[
-                { label: 'Today', value: analytics.revenue.today, color: '#fef3c7' },
-                { label: 'This Week', value: analytics.revenue.week, color: '#ffedd5' },
-                { label: 'This Month', value: analytics.revenue.month, color: '#fee2e2' },
-              ].map((metric, index) => (
-                <div
-                  key={index}
-                  className="p-4 rounded-lg shadow-sm transition-colors flex items-center hover:bg-amber-50"
-                  style={{ backgroundColor: metric.color }}
-                >
-                  <FaArrowUp className="mr-3 text-green-600 text-xl" />
-                  <div>
-                    <p className="text-gray-600 text-sm">{metric.label}</p>
-                    <p className="text-xl sm:text-2xl font-bold flex items-center text-gray-800">
-                      <FaRupeeSign className="mr-1" />{metric.value.toFixed(2)}
-                    </p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Order Count */}
-          <div className="mb-8 border-b-2 border-gray-200 pb-6">
-            <h3 className="text-lg font-medium mb-4 flex items-center text-gray-700">
-              <FaList className="mr-2" /> Today’s Orders
-            </h3>
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              {[
-                { label: 'Total', value: analytics.orderCount.total, icon: <FaList className="mr-3 text-blue-600 text-xl" />, color: '#fef3c7' },
-                { label: 'Pending', value: analytics.orderCount.pending, icon: <FaClock className="mr-3 text-red-600 text-xl" />, color: '#ffedd5' },
-                { label: 'Prepared', value: analytics.orderCount.prepared, icon: <FaCheck className="mr-3 text-green-600 text-xl" />, color: '#fee2e2' },
-                { label: 'Completed', value: analytics.orderCount.completed, icon: <FaCheck className="mr-3 text-blue-600 text-xl" />, color: '#fef3c7' },
-              ].map((metric, index) => (
-                <div
-                  key={index}
-                  className="p-4 rounded-lg shadow-sm transition-colors flex items-center hover:bg-amber-50"
-                  style={{ backgroundColor: metric.color }}
-                >
-                  {metric.icon}
-                  <div>
-                    <p className="text-gray-600 text-sm">{metric.label}</p>
-                    <p className="text-xl sm:text-2xl font-bold text-gray-800">{metric.value}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {/* Top Items */}
-          <div className="mb-8 border-b-2 border-gray-200 pb-6">
-            <h3 className="text-lg font-medium mb-4 flex items-center text-gray-700">
-              <FaHamburger className="mr-2" /> Top 5 Items (This Month)
-            </h3>
-            {analytics.topItems.length === 0 ? (
-              <p className="text-gray-600">No data available.</p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {analytics.topItems.map((item, index) => (
-                  <div
-                    key={index}
-                    className="p-4 rounded-lg shadow-sm transition-colors flex items-center hover:bg-amber-50"
-                    style={{ backgroundColor: '#fef3c7' }}
-                  >
-                    <FaArrowUp className="mr-3 text-green-600 text-xl" />
-                    <div>
-                      <p className="text-gray-800 font-medium">{item.name}</p>
-                      <p className="text-gray-600 text-sm">
-                        {item.quantity} sold (<FaRupeeSign className="inline mr-1" />{item.revenue.toFixed(2)})
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Slow-Moving Items */}
-          <div className="mb-8 border-b-2 border-gray-200 pb-6">
-            <h3 className="text-lg font-medium mb-4 flex items-center text-gray-700">
-              <FaHamburger className="mr-2" /> Slow-Moving Items (This Week)
-            </h3>
-            {analytics.slowItems.length === 0 ? (
-              <p className="text-gray-600">No data available.</p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {analytics.slowItems.map((item, index) => (
-                  <div
-                    key={index}
-                    className="p-4 rounded-lg shadow-sm transition-colors flex items-center hover:bg-amber-50"
-                    style={{ backgroundColor: '#ffedd5' }}
-                  >
-                    <FaArrowDown className="mr-3 text-red-600 text-xl" />
-                    <div>
-                      <p className="text-gray-800 font-medium">{item.name}</p>
-                      <p className="text-gray-600 text-sm">{item.quantity} sold</p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Charts */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Peak Hours */}
-            <div className="p-4 rounded-lg shadow-sm bg-white">
-              <h3 className="text-lg font-medium mb-4 flex items-center text-gray-700">
-                <FaClock className="mr-2" /> Peak Hours (Today)
-              </h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={analytics.peakHours}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="hour" />
-                  <YAxis />
-                  <Tooltip />
-                  <Bar dataKey="orders" fill="#f59e0b" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-
-            {/* Category Performance */}
-            <div className="p-4 rounded-lg shadow-sm bg-white">
-              <h3 className="text-lg font-medium mb-4 flex items-center text-gray-700">
-                <FaChartBar className="mr-2" /> Category Performance (This Month)
-              </h3>
-              <ResponsiveContainer width="100%" height={300}>
-                <PieChart>
-                  <Pie
-                    data={analytics.categories}
-                    dataKey="revenue"
-                    nameKey="name"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={100}
-                    label
-                  >
-                    {analytics.categories.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip formatter={(value) => [<FaRupeeSign className="inline mr-1" />, value.toFixed(2)]} />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Menu Management */}
       {activeTab === 'Menu Management' && (
@@ -606,7 +418,7 @@ function OperatorDashboard() {
                   <div className="flex items-center mb-2 sm:mb-0">
                     {item.image ? (
                       <img
-                        src={`${process.env.REACT_APP_API_URL}${item.image}`}
+                        src={`https://cafe-backend-ay2n.onrender.com${item.image}`}
                         alt={item.name}
                         className="w-16 h-16 object-cover rounded-lg mr-4"
                         onError={e => (e.target.src = 'https://source.unsplash.com/64x64/?food')}
