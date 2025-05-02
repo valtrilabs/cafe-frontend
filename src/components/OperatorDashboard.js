@@ -175,19 +175,9 @@ function OperatorDashboard() {
         name: item.itemId.name,
         price: item.itemId.price
       }));
-    // Ensure at least 20 items for testing
-    const itemsToUse = validItems.length >= 20 ? validItems : [
-      ...validItems,
-      ...Array(20 - validItems.length).fill().map((_, i) => ({
-        itemId: validItems[0]?.itemId || menuItems[0]?._id || 'fallback-id',
-        quantity: 1,
-        name: validItems[0]?.name || menuItems[0]?.name || `Item ${i + 1}`,
-        price: validItems[0]?.price || menuItems[0]?.price || 0
-      }))
-    ];
     setEditingOrder({
       ...order,
-      items: itemsToUse,
+      items: validItems,
       paymentMethod: order.paymentMethod || ''
     });
   };
