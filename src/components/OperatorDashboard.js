@@ -342,7 +342,6 @@ function OperatorDashboard() {
   };
 
   const exportRevenueCSV = () => {
-    // Filter orders based on selected filters
     const filteredOrders = orders.filter(order => {
       const orderDate = new Date(order.createdAt);
       const matchesDate =
@@ -356,14 +355,12 @@ function OperatorDashboard() {
       return matchesDate && matchesStatus && matchesPayment;
     });
 
-    // Format items for each order
     const formatItems = (items) => {
       return items
         .map(item => `${item.quantity} x ${item.itemId ? item.itemId.name : '[Deleted]'}`)
         .join(', ');
     };
 
-    // Format date and time as MM/DD/YYYY HH:mm:ss
     const formatDateTime = (date) => {
       const d = new Date(date);
       const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -375,9 +372,8 @@ function OperatorDashboard() {
       return `${month}/${day}/${year} ${hours}:${minutes}:${seconds}`;
     };
 
-    // Create CSV content
     const csvContent = [
-      ['Order Number', 'Date and Time', 'Items', 'Total (₹)', 'Status', 'Payment Method'], // Headers
+      ['Order Number', 'Date and Time', 'Items', 'Total (₹)', 'Status', 'Payment Method'],
       ...filteredOrders.map(order => [
         order.orderNumber,
         formatDateTime(order.createdAt),
@@ -389,10 +385,9 @@ function OperatorDashboard() {
         order.paymentMethod || 'Unknown'
       ])
     ]
-      .map(row => row.map(cell => `"${cell}"`).join(',')) // Wrap each cell in quotes to handle commas in items
+      .map(row => row.map(cell => `"${cell}"`).join(','))
       .join('\n');
 
-    // Generate and download the CSV file
     const startFormatted = formatDateTime(reportStartDate).split(' ')[0].replace(/\//g, '-');
     const endFormatted = formatDateTime(reportEndDate).split(' ')[0].replace(/\//g, '-');
     const blob = new Blob([csvContent], { type: 'text/csv' });
@@ -438,7 +433,7 @@ function OperatorDashboard() {
     };
     const { bg, icon } = styles[method] || styles.Unknown;
     return (
-      <span className="px-2 py-1 rounded-full text-white text-sm sm:text-base flex items-center" style={{ backgroundColor: bg }}>
+      <span className="px-1.5 py-0.5 rounded-full text-white text-xs sm:text-sm flex items-center whitespace-nowrap" style={{ backgroundColor: bg }}>
         {icon}
         {method}
       </span>
@@ -446,12 +441,52 @@ function OperatorDashboard() {
   };
 
   const renderItems = (items) => {
-    const summary = items
-      .slice(0, 2)
-      .map(item => `${item.quantity} x ${item.itemId ? item.itemId.name : '[Deleted]'}`)
-      .join(', ');
-    const more = items.length > 2 ? `, +${items.length - 2} more` : '';
-    return `${summary}${more}`;
+    if (items.length === 0) return 'No items';
+    const firstItem = items[0] ? `${items[0].quantity} x ${items[0].itemId ? items[0].itemId.name : '[Deleted]'}` : '';
+    const secondItem = items[1] ? `${items[1].quantity} x ${items[1].itemId ? items[1].itemId.name : '[Deleted]'}` : '';
+    const moreItems = items.length > 2 ? `+${items.length - 2} more` : '';
+    return (
+      <div className="flex flex-col items-start">
+        <span>{firstItem}</span>
+        {secondItem && <span>{secondItem}</span>}
+        {moreItems && (
+          <button
+            className="items-button text-blue-600 hover:underline text-sm"
+            onMouseEnter={(e) => {
+              const orderId = items[0].orderId || items[0]._id;
+              setShowItemsPopover(orderId);
+              const rect = e.target.getBoundingClientRect();
+              const popover = document.getElementById(`popover-${orderId}`);
+              if (popover) {
+                const viewportHeight = window.innerHeight;
+                const viewportWidth = window.innerWidth;
+                const popoverHeight = popover.offsetHeight || 200;
+                const popoverWidth = popover.offsetWidth || 200;
+                let top = rect.bottom + window.scrollY + 8;
+                let left = rect.left + window.scrollX;
+                if (rect.bottom + popoverHeight > viewportHeight) {
+                  top = rect.top + window.scrollY - popoverHeight - 8;
+                }
+                if (left + popoverWidth > viewportWidth) {
+                  left = viewportWidth - popoverWidth - 8;
+                }
+                if (left < 8) left = 8;
+                popover.style.top = `${top}px`;
+                popover.style.left = `${left}px`;
+              }
+            }}
+            onClick={(e) => {
+              const orderId = items[0].orderId || items[0]._id;
+              setShowItemsPopover(showItemsPopover === orderId ? null : orderId);
+              e.stopPropagation();
+            }}
+            aria-label={`View more items`}
+          >
+            {moreItems}
+          </button>
+        )}
+      </div>
+    );
   };
 
   const renderTableRows = () => {
@@ -475,38 +510,8 @@ function OperatorDashboard() {
           <td className="p-3 sm:p-4 text-sm sm:text-base text-center hidden md:table-cell w-1/12">
             {new Date(order.createdAt).toLocaleDateString()}
           </td>
-          <td className="p-3 sm:p-4 text-sm sm:text-base w-4/12 relative">
-            <button
-              className="items-button text-blue-600 hover:underline"
-              onMouseEnter={(e) => {
-                setShowItemsPopover(order._id);
-                const rect = e.target.getBoundingClientRect();
-                const popover = document.getElementById(`popover-${order._id}`);
-                if (popover) {
-                  const viewportHeight = window.innerHeight;
-                  const viewportWidth = window.innerWidth;
-                  const popoverHeight = popover.offsetHeight || 200;
-                  const popoverWidth = popover.offsetWidth || 200;
-                  let top = rect.bottom + window.scrollY + 8;
-                  let left = rect.left + window.scrollX;
-                  if (rect.bottom + popoverHeight > viewportHeight) {
-                    top = rect.top + window.scrollY - popoverHeight - 8;
-                  }
-                  if (left + popoverWidth > viewportWidth) {
-                    left = viewportWidth - popoverWidth - 8;
-                  }
-                  if (left < 8) left = 8;
-                  popover.style.top = `${top}px`;
-                  popover.style.left = `${left}px`;
-                }
-              }}
-              onClick={() => {
-                setShowItemsPopover(showItemsPopover === order._id ? null : order._id);
-              }}
-              aria-label={`View items for order ${order.orderNumber}`}
-            >
-              {renderItems(order.items)}
-            </button>
+          <td className="p-3 sm:p-4 text-sm sm:text-base w-3/12 relative">
+            {renderItems(order.items.map(item => ({ ...item, orderId: order._id })))}
             {showItemsPopover === order._id && (
               <div
                 id={`popover-${order._id}`}
@@ -539,7 +544,7 @@ function OperatorDashboard() {
           >
             {order.status === 'Pending' ? 'New' : order.status === 'Prepared' ? 'Served' : 'Paid'}
           </td>
-          <td className="p-3 sm:p-4 text-sm sm:text-base text-center w-1/12">
+          <td className="p-3 sm:p-4 text-sm sm:text-base text-center w-2/12 whitespace-nowrap">
             {activeTab === 'Paid Bills' ? paymentMethodBadge(order.paymentMethod || 'Unknown') : 'Not Paid'}
           </td>
           <td className="p-3 sm:p-4 flex gap-2 justify-center w-2/12">
@@ -987,16 +992,16 @@ function OperatorDashboard() {
                   <table className="min-w-full text-left border-separate" style={{ borderSpacing: '0 4px' }}>
                     <thead className="sticky top-0 bg-amber-100">
                       <tr>
-                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-1/12">TABLE</th>
-                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-1/12">ORDER NUMBER</th>
-                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center hidden md:table-cell w-1/12">DATE</th>
-                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold w-4/12">ITEMS</th>
-                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-1/12">TOTAL</th>
-                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-1/12">STATUS</th>
-                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-1/12">
-                          {activeTab === 'Paid Bills' ? 'PAID BY' : 'PAYMENT'}
+                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-1/12">Table</th>
+                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-1/12">Order number</th>
+                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center hidden md:table-cell w-1/12">Date</th>
+                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold w-3/12">Items</th>
+                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-1/12">Total</th>
+                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-1/12">Status</th>
+                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-2/12">
+                          {activeTab === 'Paid Bills' ? 'Paid by' : 'Payment'}
                         </th>
-                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-2/12">ACTIONS</th>
+                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-2/12">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
