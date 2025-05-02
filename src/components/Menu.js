@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { FaShoppingCart, FaUtensils, FaRupeeSign, FaQrcode } from 'react-icons/fa';
-import { QRCodeCanvas } from 'qrcode.react';
+import { FaShoppingCart, FaUtensils, FaRupeeSign } from 'react-icons/fa';
 
 function Menu() {
   const [menuItems, setMenuItems] = useState([]);
@@ -14,8 +13,6 @@ function Menu() {
   const [orderSummary, setOrderSummary] = useState(null);
   const [sessionValid, setSessionValid] = useState(true);
   const [sessionMessage, setSessionMessage] = useState('');
-  const [qrToken, setQrToken] = useState(null);
-  const [showQrCode, setShowQrCode] = useState(false);
 
   const location = useLocation();
   const navigate = useNavigate();
@@ -37,6 +34,23 @@ function Menu() {
       console.error('Session validation error:', err.response?.data || err.message);
       setSessionValid(false);
       setSessionMessage(err.response?.data?.error || 'Invalid session. Please scan the QR code again.');
+      navigate('/scan-qr', { state: { message: err.response?.data?.error } });
+      return null;
+    }
+  };
+
+  const checkOrderStatus = async (sessionToken) => {
+    try {
+      console.log(`Checking order status with token: ${sessionToken}`);
+      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/sessions/order-status`, {
+        params: { token: sessionToken }
+      });
+      console.log(`Order status: ${response.data.status}`);
+      return response.data;
+    } catch (err) {
+      console.error('Order status check error:', err.response?.data || err.message);
+      setSessionValid(false);
+      setSessionMessage(err.response?.data?.error || 'Invalid session or order. Please scan QR code again.');
       navigate('/scan-qr', { state: { message: err.response?.data?.error } });
       return null;
     }
@@ -71,7 +85,7 @@ function Menu() {
         if (attempt === retries) {
           setSessionValid(false);
           setSessionMessage('Failed to create session after retries. Please scan the QR code.');
-          navigate('/scan-qr', { state: { message: 'Failed to create session. Please scan the QR code.' } });
+          navigate('/scan-qr', { state: { message: 'Failed to create session. Please scan QR code.' } });
           return null;
         }
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -87,7 +101,7 @@ function Menu() {
         console.error('Invalid table number:', tableNumber);
         setSessionValid(false);
         setSessionMessage('Invalid table number. Please scan the QR code.');
-        navigate('/scan-qr', { state: { message: 'Invalid table number. Please scan the QR code.' } });
+        navigate('/scan-qr', { state: { message: 'Invalid table number. Please scan QR code.' } });
         return;
       }
 
@@ -103,6 +117,16 @@ function Menu() {
 
       const result = await validateSession(sessionToken);
       if (result) {
+        if (orderSummary) {
+          // Check order status on refresh
+          const orderStatus = await checkOrderStatus(sessionToken);
+          if (orderStatus && orderStatus.status !== 'Pending') {
+            setSessionValid(false);
+            setSessionMessage('Order is prepared or completed. Please scan QR code again.');
+            navigate('/scan-qr', { state: { message: 'Order is prepared or completed. Please scan QR code again.' } });
+            return;
+          }
+        }
         fetchMenu(sessionToken);
       }
     };
@@ -122,40 +146,12 @@ function Menu() {
     return () => clearInterval(interval);
   }, [tableNumber, token, navigate, orderSummary]);
 
-  const startNewOrder = async () => {
+  const startNewOrder = () => {
     console.log(`Starting new order for table: ${tableNumber}`);
     setOrderSummary(null);
-    setShowQrCode(false);
-    const tableNum = Number(tableNumber);
-    if (isNaN(tableNum) || tableNum < 1) {
-      console.error('Invalid table number for startNewOrder:', tableNumber);
-      setSessionValid(false);
-      setSessionMessage('Invalid table number. Please scan the QR code.');
-      navigate('/scan-qr', { state: { message: 'Invalid table number. Please scan the QR code.' } });
-      return;
-    }
-    const newToken = await createNewSession(tableNum);
-    if (newToken) {
-      console.log(`Redirecting to new order: /order?table=${tableNum}&token=${newToken}`);
-      navigate(`/order?table=${tableNum}&token=${newToken}`);
-    }
-  };
-
-  const generateQrCode = async () => {
-    console.log(`Generating QR code for table: ${tableNumber}`);
-    const tableNum = Number(tableNumber);
-    if (isNaN(tableNum) || tableNum < 1) {
-      console.error('Invalid table number for QR code:', tableNumber);
-      setSessionValid(false);
-      setSessionMessage('Invalid table number. Please scan the QR code.');
-      navigate('/scan-qr', { state: { message: 'Invalid table number. Please scan the QR code.' } });
-      return;
-    }
-    const newToken = await createNewSession(tableNum);
-    if (newToken) {
-      setQrToken(newToken);
-      setShowQrCode(true);
-    }
+    setSessionValid(false);
+    setSessionMessage('Please scan the QR code to start a new order.');
+    navigate('/scan-qr', { state: { message: 'Please scan the QR code to start a new order.' } });
   };
 
   const categories = [
@@ -299,20 +295,7 @@ function Menu() {
             >
               <FaUtensils className="mr-2" /> Start New Order
             </button>
-            <button
-              className="w-full sm:w-auto px-4 py-2 rounded-lg text-white flex items-center justify-center"
-              style={{ backgroundColor: '#16a34a' }}
-              onClick={generateQrCode}
-            >
-              <FaQrcode className="mr-2" /> Scan QR Code Again
-            </button>
           </div>
-          {showQrCode && qrToken && (
-            <div className="mt-4 bg-white rounded-lg shadow-md p-4 text-center">
-              <h3 className="text-lg font-semibold mb-2">Scan to Continue Ordering</h3>
-              <QRCodeCanvas value={`https://cafe-frontend-pi.vercel.app/order?table=${tableNumber}&token=${qrToken}`} />
-            </div>
-          )}
         </div>
       </div>
     );
