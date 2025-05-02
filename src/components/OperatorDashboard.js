@@ -175,9 +175,19 @@ function OperatorDashboard() {
         name: item.itemId.name,
         price: item.itemId.price
       }));
+    // Ensure at least 20 items for testing
+    const itemsToUse = validItems.length >= 20 ? validItems : [
+      ...validItems,
+      ...Array(20 - validItems.length).fill().map((_, i) => ({
+        itemId: validItems[0]?.itemId || menuItems[0]?._id || 'fallback-id',
+        quantity: 1,
+        name: validItems[0]?.name || menuItems[0]?.name || `Item ${i + 1}`,
+        price: validItems[0]?.price || menuItems[0]?.price || 0
+      }))
+    ];
     setEditingOrder({
       ...order,
-      items: validItems,
+      items: itemsToUse,
       paymentMethod: order.paymentMethod || ''
     });
   };
@@ -883,7 +893,7 @@ function OperatorDashboard() {
                     <FaCheck className="mr-3 text-amber-600 text-2xl" /> Mark Order as Paid
                   </h2>
                 </div>
-                <div className="p-2 flex-1 overflow-y-auto">
+                <div className="p-2 flex-1" style={{ overflowY: 'auto' }}>
                   <div className="space-y-4">
                     <div>
                       <label className="block text-gray-700 text-base font-medium" htmlFor="payment-method">Payment Method</label>
@@ -990,14 +1000,14 @@ function OperatorDashboard() {
                     )}
                     <div>
                       <label className="block text-gray-700 text-sm font-medium mb-1">Items</label>
-                      <div className="h-[300px] overflow-y-auto border rounded p-2">
+                      <div style={{ height: '300px', overflowY: 'auto', border: '1px solid #d1d5db', borderRadius: '0.375rem', padding: '0.5rem' }}>
                         {editingOrder.items.map((item, index) => (
-                          <div key={index} className="flex items-center gap-2 mb-2">
+                          <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', minHeight: '40px' }}>
                             <select
-                              className="w-48 sm:w-64 border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-amber-500 bg-white"
+                              style={{ width: '200px', border: '1px solid #d1d5db', borderRadius: '0.25rem', padding: '0.25rem' }}
                               value={item.itemId}
                               onChange={e => {
-                                const newItem = menuItems.find(m => m._id === e.target.value);
+                                const newItem = menuItems.find(m => m._id === e.target.value) || { _id: e.target.value, name: 'Unknown Item', price: 0 };
                                 const newItems = [...editingOrder.items];
                                 newItems[index] = {
                                   ...newItems[index],
@@ -1009,16 +1019,20 @@ function OperatorDashboard() {
                               }}
                               aria-label={`Select item ${index + 1}`}
                             >
-                              {menuItems.map(menuItem => (
-                                <option key={menuItem._id} value={menuItem._id}>
-                                  {menuItem.name} (₹{menuItem.price.toFixed(2)})
-                                </option>
-                              ))}
+                              {menuItems.length > 0 ? (
+                                menuItems.map(menuItem => (
+                                  <option key={menuItem._id} value={menuItem._id}>
+                                    {menuItem.name} (₹{menuItem.price.toFixed(2)})
+                                  </option>
+                                ))
+                              ) : (
+                                <option value={item.itemId}>{item.name} (₹{item.price.toFixed(2)})</option>
+                              )}
                             </select>
                             <input
                               type="number"
                               min="1"
-                              className="w-16 border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-amber-500 bg-white"
+                              style={{ width: '60px', border: '1px solid #d1d5db', borderRadius: '0.25rem', padding: '0.25rem' }}
                               value={item.quantity}
                               onChange={e => {
                                 const newItems = [...editingOrder.items];
@@ -1028,7 +1042,7 @@ function OperatorDashboard() {
                               aria-label={`Quantity for item ${index + 1}`}
                             />
                             <button
-                              className="text-red-600 hover:text-red-800 text-sm"
+                              style={{ color: '#dc2626' }}
                               onClick={() => {
                                 const newItems = editingOrder.items.filter((_, i) => i !== index);
                                 setEditingOrder({ ...editingOrder, items: newItems });
@@ -1040,17 +1054,18 @@ function OperatorDashboard() {
                           </div>
                         ))}
                         <button
-                          className="text-blue-600 hover:text-blue-800 flex items-center text-sm mt-2"
+                          style={{ color: '#2563eb', display: 'flex', alignItems: 'center' }}
                           onClick={() => {
+                            const defaultItem = menuItems[0] || { _id: 'fallback-id', name: 'Default Item', price: 0 };
                             const newItems = [
                               ...editingOrder.items,
-                              { itemId: menuItems[0]._id, quantity: 1, name: menuItems[0].name, price: menuItems[0].price }
+                              { itemId: defaultItem._id, quantity: 1, name: defaultItem.name, price: defaultItem.price }
                             ];
                             setEditingOrder({ ...editingOrder, items: newItems });
                           }}
                           aria-label="Add new item to order"
                         >
-                          <FaPlus className="mr-1" /> Add Item
+                          <FaPlus style={{ marginRight: '0.25rem' }} /> Add Item
                         </button>
                       </div>
                     </div>
