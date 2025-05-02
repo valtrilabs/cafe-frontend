@@ -547,7 +547,7 @@ function OperatorDashboard() {
           <td className="p-3 sm:p-4 text-sm sm:text-base text-center w-2/12 whitespace-nowrap">
             {activeTab === 'Paid Bills' ? paymentMethodBadge(order.paymentMethod || 'Unknown') : 'Not Paid'}
           </td>
-          <td className="p-3 sm:p-4 flex gap-2 justify-center w-2/12">
+          <td className="p-3 sm:p-4 flex gap-2 justify-center items-center w-2/12">
             <button
               className="p-2 rounded text-white hover:bg-blue-700 transition-colors"
               style={{ backgroundColor: '#2563eb' }}
