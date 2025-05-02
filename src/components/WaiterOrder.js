@@ -51,11 +51,13 @@ function WaiterOrder() {
     try {
       console.log(`Fetching orders for table ${tableNum}`);
       const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/orders`, {
-        params: { status: 'Pending,Prepared' } // Fetch only Pending or Prepared orders
+        params: { 
+          status: 'Pending,Prepared', // Comma-separated list of statuses
+          tableNumber: tableNum // Add tableNumber to the query
+        }
       });
-      const tableOrders = response.data.filter(order => order.tableNumber === Number(tableNum));
-      console.log('Orders fetched:', tableOrders);
-      setOrders(tableOrders);
+      console.log('Orders fetched:', response.data);
+      setOrders(response.data);
       setError(null);
     } catch (err) {
       console.error('Error fetching orders:', err.response?.data || err.message);
