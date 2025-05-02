@@ -928,13 +928,13 @@ function OperatorDashboard() {
           {editingOrder && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
               <div ref={modalRef} className="bg-white rounded-lg p-4 w-full max-w-md flex flex-col max-h-[80vh]">
-                <div className="sticky top-0 bg-white z-10 pb-2 border-b">
-                  <h2 className="text-base sm:text-lg font-bold flex items-center text-gray-800">
-                    <FaEdit className="mr-2 text-amber-600 text-lg sm:text-xl" /> Edit Order - Table {editingOrder.tableNumber}
+                <div className="sticky top-0 bg-white z-10 p-2 border-b">
+                  <h2 className="text-base font-bold flex items-center text-gray-800">
+                    <FaEdit className="mr-2 text-amber-600 text-lg" /> Edit Order - Table {editingOrder.tableNumber}
                   </h2>
                 </div>
-                <div className={`flex-1 ${editingOrder.items.length > 5 ? 'max-h-[40vh] overflow-y-auto' : ''} py-2`}>
-                  <div className="space-y-4">
+                <div className="flex-1 max-h-[60vh] overflow-y-auto p-2">
+                  <div className="space-y-2">
                     <div>
                       <label className="block text-gray-700 text-sm font-medium" htmlFor="table-number">Table Number</label>
                       <input
@@ -1048,7 +1048,7 @@ function OperatorDashboard() {
                     </div>
                   </div>
                 </div>
-                <div className="sticky bottom-0 bg-white z-10 pt-2 border-t">
+                <div className="sticky bottom-0 bg-white z-10 p-2 border-t">
                   <div className="flex justify-end gap-2">
                     <button
                       className="px-6 py-2 rounded text-white text-sm font-medium flex items-center hover:bg-gray-600"
