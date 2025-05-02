@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FaShoppingCart, FaUtensils, FaRupeeSign, FaPlus, FaMinus, FaTrash } from 'react-icons/fa';
+import { FaShoppingCart, FaUtensils, FaRupeeSign, FaPlus, FaMinus, FaTrash, FaEdit, FaList } from 'react-icons/fa';
 
 function WaiterOrder() {
   const [menuItems, setMenuItems] = useState([]);
@@ -12,6 +12,9 @@ function WaiterOrder() {
   const [addedItemId, setAddedItemId] = useState(null);
   const [orderSummary, setOrderSummary] = useState(null);
   const [sessionToken, setSessionToken] = useState(null);
+  const [orders, setOrders] = useState([]); // To store active orders for the table
+  const [isViewingOrders, setIsViewingOrders] = useState(false); // Toggle between order taking and viewing
+  const [editingOrderId, setEditingOrderId] = useState(null); // Track the order being edited
 
   // Fetch menu items (no authentication required for waiter)
   const fetchMenu = async () => {
@@ -40,6 +43,23 @@ function WaiterOrder() {
       console.error('Error creating session:', err.response?.data || err.message);
       setError('Failed to create session. Please try again.');
       return null;
+    }
+  };
+
+  // Fetch active orders for a table
+  const fetchOrders = async (tableNum) => {
+    try {
+      console.log(`Fetching orders for table ${tableNum}`);
+      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/orders`, {
+        params: { status: 'Pending,Prepared' } // Fetch only Pending or Prepared orders
+      });
+      const tableOrders = response.data.filter(order => order.tableNumber === Number(tableNum));
+      console.log('Orders fetched:', tableOrders);
+      setOrders(tableOrders);
+      setError(null);
+    } catch (err) {
+      console.error('Error fetching orders:', err.response?.data || err.message);
+      setError('Failed to fetch orders. Please try again.');
     }
   };
 
@@ -123,7 +143,7 @@ function WaiterOrder() {
     setCart(cart.filter(cartItem => cartItem.itemId !== itemId));
   };
 
-  // Place order
+  // Place a new order
   const placeOrder = async () => {
     if (!tableNumber || isNaN(tableNumber) || Number(tableNumber) < 1) {
       setError('Please enter a valid table number.');
@@ -164,6 +184,38 @@ function WaiterOrder() {
     }
   };
 
+  // Update an existing order
+  const updateOrder = async () => {
+    if (!editingOrderId) {
+      setError('No order selected for editing.');
+      return;
+    }
+    if (cart.length === 0) {
+      setError('Cart is empty. Add items to update the order.');
+      return;
+    }
+
+    try {
+      console.log(`Updating order ${editingOrderId}`);
+      const response = await axios.put(`${process.env.REACT_APP_API_URL}/api/orders/${editingOrderId}`, {
+        items: cart.map(item => ({ itemId: item.itemId, quantity: item.quantity }))
+      });
+      console.log('Order updated:', response.data);
+      setOrderSummary({
+        orderNumber: response.data.orderNumber,
+        items: cart,
+        total: cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
+      });
+      setCart([]);
+      setIsMiniCartOpen(false);
+      setEditingOrderId(null);
+      setIsViewingOrders(false);
+    } catch (err) {
+      console.error('Error updating order:', err.response?.data || err.message);
+      setError('Failed to update order. Please try again.');
+    }
+  };
+
   // Start a new order
   const startNewOrder = () => {
     setOrderSummary(null);
@@ -171,6 +223,27 @@ function WaiterOrder() {
     setIsMiniCartOpen(false);
     setTableNumber('');
     setError(null);
+    setIsViewingOrders(false);
+    setEditingOrderId(null);
+    setOrders([]);
+  };
+
+  // Load an order into the cart for editing
+  const editOrder = (order) => {
+    const cartItems = order.items.map(item => ({
+      itemId: item.itemId._id,
+      name: item.itemId.name,
+      price: item.itemId.price,
+      quantity: item.quantity,
+      image: item.itemId.image
+        ? `${process.env.REACT_APP_API_URL}${item.itemId.image}`
+        : 'https://source.unsplash.com/100x100/?food',
+      category: item.itemId.category || 'Uncategorized'
+    }));
+    setCart(cartItems);
+    setEditingOrderId(order._id);
+    setIsViewingOrders(false);
+    setIsMiniCartOpen(true);
   };
 
   const totalPrice = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
@@ -187,8 +260,12 @@ function WaiterOrder() {
           </div>
         </header>
         <div className="container mx-auto p-4">
-          <h2 className="text-2xl font-bold mb-4">Order Summary</h2>
-          <p className="text-gray-600 mb-4">Order #{orderSummary.orderNumber} for Table {tableNumber} has been placed successfully.</p>
+          <h2 className="text-2xl font-bold mb-4">{editingOrderId ? 'Order Updated' : 'Order Summary'}</h2>
+          <p className="text-gray-600 mb-4">
+            {editingOrderId
+              ? `Order #${orderSummary.orderNumber} for Table ${tableNumber} has been updated successfully.`
+              : `Order #${orderSummary.orderNumber} for Table ${tableNumber} has been placed successfully.`}
+          </p>
           <div className="bg-white rounded-lg shadow-md p-4">
             <h3 className="text-lg font-semibold mb-2">Ordered Items</h3>
             <ul className="space-y-2">
@@ -221,6 +298,120 @@ function WaiterOrder() {
     );
   }
 
+  if (isViewingOrders) {
+    return (
+      <div className="min-h-screen bg-orange-50 p-4">
+        <header 
+          className="sticky top-0 shadow-lg z-50 border-b-2 border-amber-900" 
+          style={{ backgroundColor: '#92400e', color: '#ffffff' }}
+        >
+          <div className="container mx-auto p-2 sm:p-4 flex justify-between items-center">
+            <h1 className="text-lg sm:text-2xl font-bold flex items-center">
+              <FaUtensils className="mr-2" style={{ color: '#fcd34d' }} /> GSaheb Cafe - View Orders
+            </h1>
+            <button
+              className="text-white px-3 py-1 rounded-lg text-sm"
+              style={{ backgroundColor: '#b45309' }}
+              onClick={() => {
+                setIsViewingOrders(false);
+                setOrders([]);
+                setTableNumber('');
+                setError(null);
+              }}
+            >
+              Back to Order
+            </button>
+          </div>
+        </header>
+        <div className="container mx-auto p-2 sm:p-4">
+          <div className="mb-4">
+            <label className="block text-gray-700 text-base sm:text-lg font-medium mb-2" htmlFor="table-number">
+              Table Number
+            </label>
+            <div className="flex items-center space-x-2">
+              <input
+                id="table-number"
+                type="number"
+                min="1"
+                value={tableNumber}
+                onChange={(e) => setTableNumber(e.target.value)}
+                className="w-full sm:w-1/4 border rounded-lg px-3 py-2 sm:px-4 sm:py-3 text-base sm:text-lg focus:ring-2 focus:ring-amber-500 bg-white shadow-sm"
+                placeholder="Enter table number"
+                required
+                aria-label="Table number"
+              />
+              <button
+                className="px-4 py-2 rounded-lg text-white flex items-center"
+                style={{ backgroundColor: '#16a34a' }}
+                onClick={() => fetchOrders(tableNumber)}
+                disabled={!tableNumber || isNaN(tableNumber) || Number(tableNumber) < 1}
+              >
+                <FaList className="mr-2" /> Fetch Orders
+              </button>
+            </div>
+          </div>
+          {error && (
+            <div className="text-center text-red-600 mb-4">
+              <p>{error}</p>
+              <button
+                className="mt-2 px-3 sm:px-4 py-1 sm:py-2 rounded-lg text-white text-sm"
+                style={{ backgroundColor: '#b45309' }}
+                onClick={() => { setError(null); fetchOrders(tableNumber); }}
+              >
+                Retry
+              </button>
+            </div>
+          )}
+          {orders.length === 0 ? (
+            <p className="text-center text-gray-600">No active orders for Table {tableNumber}.</p>
+          ) : (
+            <div className="space-y-4">
+              {orders.map(order => (
+                <div key={order._id} className="bg-white rounded-lg shadow-md p-4">
+                  <div className="flex justify-between items-center">
+                    <h3 className="text-lg font-semibold">Order #{order.orderNumber}</h3>
+                    <button
+                      className="px-3 py-1 rounded-lg text-white flex items-center"
+                      style={{ backgroundColor: '#b45309' }}
+                      onClick={() => editOrder(order)}
+                    >
+                      <FaEdit className="mr-2" /> Edit
+                    </button>
+                  </div>
+                  <p className="text-sm text-gray-600">Status: {order.status}</p>
+                  <ul className="space-y-2 mt-2">
+                    {order.items.map(item => (
+                      <li key={item.itemId._id} className="flex items-center">
+                        <img
+                          src={
+                            item.itemId.image
+                              ? `${process.env.REACT_APP_API_URL}${item.itemId.image}`
+                              : 'https://source.unsplash.com/100x100/?food'
+                          }
+                          alt={item.itemId.name}
+                          className="w-12 h-12 object-cover rounded mr-3"
+                        />
+                        <div className="flex-1">
+                          <p className="text-sm font-medium">{item.itemId.name}</p>
+                          <p className="text-sm text-gray-600">{item.quantity} x <FaRupeeSign className="inline mr-1" />{item.itemId.price.toFixed(2)}</p>
+                        </div>
+                        <p className="text-sm font-semibold"><FaRupeeSign className="inline mr-1" />{(item.quantity * item.itemId.price).toFixed(2)}</p>
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="mt-2 text-lg font-bold flex items-center">
+                    Total: <FaRupeeSign className="ml-1 mr-1" />
+                    {order.items.reduce((sum, item) => sum + item.quantity * item.itemId.price, 0).toFixed(2)}
+                  </p>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen bg-orange-50 pb-32">
       <header 
@@ -238,6 +429,13 @@ function WaiterOrder() {
             >
               <FaShoppingCart className="mr-1 sm:mr-2" style={{ color: '#fcd34d' }} /> Cart: {itemCount} item{itemCount !== 1 ? 's' : ''} (<FaRupeeSign className="inline mr-1" />{totalPrice.toFixed(2)})
             </span>
+            <button
+              className="px-3 py-1 rounded-lg text-white flex items-center text-sm"
+              style={{ backgroundColor: '#16a34a' }}
+              onClick={() => setIsViewingOrders(true)}
+            >
+              <FaList className="mr-2" /> View Orders
+            </button>
           </div>
         </div>
       </header>
@@ -419,14 +617,25 @@ function WaiterOrder() {
                   <p className="text-base sm:text-lg font-bold text-gray-800 flex items-center">
                     Total: <FaRupeeSign className="ml-1 mr-1" />{totalPrice.toFixed(2)}
                   </p>
-                  <button
-                    className="w-full sm:w-auto px-4 sm:px-6 py-1 sm:py-2 rounded-lg text-white transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center text-xs sm:text-sm"
-                    style={{ backgroundColor: cart.length === 0 ? '#9ca3af' : '#b45309' }}
-                    onClick={placeOrder}
-                    disabled={cart.length === 0}
-                  >
-                    <FaUtensils className="mr-1 sm:mr-2" /> Place Order
-                  </button>
+                  {editingOrderId ? (
+                    <button
+                      className="w-full sm:w-auto px-4 sm:px-6 py-1 sm:py-2 rounded-lg text-white transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center text-xs sm:text-sm"
+                      style={{ backgroundColor: cart.length === 0 ? '#9ca3af' : '#b45309' }}
+                      onClick={updateOrder}
+                      disabled={cart.length === 0}
+                    >
+                      <FaEdit className="mr-1 sm:mr-2" /> Update Order
+                    </button>
+                  ) : (
+                    <button
+                      className="w-full sm:w-auto px-4 sm:px-6 py-1 sm:py-2 rounded-lg text-white transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed flex items-center justify-center text-xs sm:text-sm"
+                      style={{ backgroundColor: cart.length === 0 ? '#9ca3af' : '#b45309' }}
+                      onClick={placeOrder}
+                      disabled={cart.length === 0}
+                    >
+                      <FaUtensils className="mr-1 sm:mr-2" /> Place Order
+                    </button>
+                  )}
                 </div>
               </div>
             )}
