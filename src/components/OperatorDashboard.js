@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FaPlus, FaEdit, FaTrash, FaCheck, FaTimes, FaUtensils, FaHamburger, FaPrint, FaRupeeSign, FaFileExport, FaBars, FaClock } from 'react-icons/fa';
+import DatePicker from 'react-datepicker';
+import 'react-datepicker/dist/react-datepicker.css';
+import { FaPlus, FaEdit, FaTrash, FaCheck, FaTimes, FaUtensils, FaHamburger, FaPrint, FaRupeeSign, FaFileExport, FaBars, FaClock, FaMoneyBillWave, FaMobileAlt, FaCreditCard, FaWallet, FaQuestionCircle } from 'react-icons/fa';
 
 function OperatorDashboard() {
   const [orders, setOrders] = useState([]);
@@ -23,6 +25,9 @@ function OperatorDashboard() {
     year: 0
   });
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
+  const [startDate, setStartDate] = useState(new Date(new Date().setDate(new Date().getDate() - 1)));
+  const [endDate, setEndDate] = useState(new Date());
+  const [showItemsPopover, setShowItemsPopover] = useState(null);
 
   const fetchOrders = async (tab) => {
     try {
@@ -311,8 +316,49 @@ function OperatorDashboard() {
       'Ready Orders': 'Prepared',
       'Paid Bills': 'Completed'
     }[activeTab];
+    if (activeTab === 'Paid Bills') {
+      const orderDate = new Date(order.createdAt);
+      return (
+        order.status === tabStatus &&
+        orderDate >= new Date(startDate.setHours(0, 0, 0, 0)) &&
+        orderDate <= new Date(endDate.setHours(23, 59, 59, 999))
+      );
+    }
     return order.status === tabStatus;
   });
+
+  const paymentMethodSummary = filteredOrders.reduce((acc, order) => {
+    const method = order.paymentMethod || 'Unknown';
+    const total = order.items.reduce((sum, item) => sum + (item.itemId ? item.quantity * item.itemId.price : 0), 0);
+    acc[method] = (acc[method] || 0) + total;
+    return acc;
+  }, {});
+
+  const paymentMethodBadge = (method) => {
+    const styles = {
+      Cash: { bg: '#16a34a', icon: <FaMoneyBillWave className="mr-1" /> },
+      UPI: { bg: '#2563eb', icon: <FaMobileAlt className="mr-1" /> },
+      Card: { bg: '#f59e0b', icon: <FaCreditCard className="mr-1" /> },
+      Other: { bg: '#4b5563', icon: <FaWallet className="mr-1" /> },
+      Unknown: { bg: '#dc2626', icon: <FaQuestionCircle className="mr-1" /> }
+    };
+    const { bg, icon } = styles[method] || styles.Unknown;
+    return (
+      <span className="px-2 py-1 rounded-full text-white text-sm flex items-center" style={{ backgroundColor: bg }}>
+        {icon}
+        {method}
+      </span>
+    );
+  };
+
+  const renderItems = (items) => {
+    const summary = items
+      .slice(0, 2)
+      .map(item => `${item.quantity} x ${item.itemId ? item.itemId.name : '[Deleted]'}`)
+      .join(', ');
+    const more = items.length > 2 ? `, +${items.length - 2} more` : '';
+    return `${summary}${more}`;
+  };
 
   return (
     <div className="min-h-screen bg-gray-100 flex">
@@ -542,6 +588,62 @@ function OperatorDashboard() {
               <h2 className="text-2xl font-semibold mb-6 text-gray-800">
                 {activeTab}
               </h2>
+
+              {/* Date Filter for Paid Bills */}
+              {activeTab === 'Paid Bills' && (
+                <div className="mb-6 flex flex-col sm:flex-row gap-4 items-start sm:items-center">
+                  <div className="flex items-center gap-4">
+                    <div>
+                      <label className="block text-gray-700 text-lg font-medium mb-1">From</label>
+                      <DatePicker
+                        selected={startDate}
+                        onChange={date => setStartDate(date)}
+                        maxDate={endDate}
+                        className="border rounded-lg px-4 py-3 text-lg focus:ring-2 focus:ring-amber-500"
+                        aria-label="Select start date"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-gray-700 text-lg font-medium mb-1">To</label>
+                      <DatePicker
+                        selected={endDate}
+                        onChange={date => setEndDate(date)}
+                        minDate={startDate}
+                        maxDate={new Date()}
+                        className="border rounded-lg px-4 py-3 text-lg focus:ring-2 focus:ring-amber-500"
+                        aria-label="Select end date"
+                      />
+                    </div>
+                  </div>
+                  <button
+                    className="px-4 py-2 rounded-lg text-white text-lg hover:bg-gray-700 transition-colors"
+                    style={{ backgroundColor: '#4b5563' }}
+                    onClick={() => {
+                      setStartDate(new Date(new Date().setDate(new Date().getDate() - 1)));
+                      setEndDate(new Date());
+                    }}
+                    aria-label="Reset date filter"
+                  >
+                    Reset
+                  </button>
+                </div>
+              )}
+
+              {/* Payment Method Summary for Paid Bills */}
+              {activeTab === 'Paid Bills' && (
+                <div className="mb-6 bg-gray-50 p-4 rounded-lg">
+                  <h3 className="text-lg font-medium mb-2 text-gray-700">Payment Summary</h3>
+                  <div className="flex flex-wrap gap-4">
+                    {Object.entries(paymentMethodSummary).map(([method, revenue]) => (
+                      <div key={method} className="flex items-center">
+                        {paymentMethodBadge(method)}
+                        <span className="ml-2 text-lg text-gray-800">₹{revenue.toFixed(2)}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="overflow-x-auto">
                 <table className="w-full text-left">
                   <thead>
@@ -552,7 +654,7 @@ function OperatorDashboard() {
                       <th className="p-4 text-lg font-medium w-3/12">Items</th>
                       <th className="p-4 text-lg font-medium w-1/12">Total</th>
                       <th className="p-4 text-lg font-medium w-1/12">Status</th>
-                      <th className="p-4 text-lg font-medium w-1/12 hidden sm:table-cell">
+                      <th className="p-4 text-lg font-medium w-1/12">
                         {activeTab === 'Paid Bills' ? 'Paid By' : 'Payment'}
                       </th>
                       <th className="p-4 text-lg font-medium w-3/12">Actions</th>
@@ -578,10 +680,28 @@ function OperatorDashboard() {
                           <td className="p-4 text-lg hidden sm:table-cell">
                             {new Date(order.createdAt).toLocaleDateString()}
                           </td>
-                          <td className="p-4 text-lg">
-                            {order.items
-                              .map(item => `${item.quantity} x ${item.itemId ? item.itemId.name : '[Deleted]'}`)
-                              .join(', ')}
+                          <td className="p-4 text-lg relative">
+                            <button
+                              className="text-blue-600 hover:underline"
+                              onClick={() => setShowItemsPopover(showItemsPopover === order._id ? null : order._id)}
+                              onMouseEnter={() => setShowItemsPopover(order._id)}
+                              onMouseLeave={() => setShowItemsPopover(null)}
+                              aria-label={`View items for order ${order.orderNumber}`}
+                            >
+                              {renderItems(order.items)}
+                            </button>
+                            {showItemsPopover === order._id && (
+                              <div className="absolute z-10 bg-white border rounded-lg shadow-md p-4 max-w-xs w-full">
+                                <ul className="list-disc pl-5 space-y-1">
+                                  {order.items.map((item, index) => (
+                                    <li key={index} className="text-sm">
+                                      {item.quantity} x {item.itemId ? item.itemId.name : '[Deleted]'} (₹
+                                      {(item.quantity * (item.itemId ? item.itemId.price : 0)).toFixed(2)})
+                                    </li>
+                                  ))}
+                                </ul>
+                              </div>
+                            )}
                           </td>
                           <td className="p-4 text-lg">
                             ₹{order.items
@@ -599,8 +719,8 @@ function OperatorDashboard() {
                           >
                             {order.status === 'Pending' ? 'New' : order.status === 'Prepared' ? 'Ready' : 'Paid'}
                           </td>
-                          <td className="p-4 text-lg hidden sm:table-cell">
-                            {activeTab === 'Paid Bills' ? order.paymentMethod || 'Unknown' : 'Not Paid'}
+                          <td className="p-4 text-lg">
+                            {activeTab === 'Paid Bills' ? paymentMethodBadge(order.paymentMethod || 'Unknown') : 'Not Paid'}
                           </td>
                           <td className="p-4 flex flex-wrap gap-2">
                             <button
