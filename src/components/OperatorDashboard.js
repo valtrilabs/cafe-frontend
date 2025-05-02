@@ -547,7 +547,7 @@ function OperatorDashboard() {
           <td className="p-3 sm:p-4 text-sm sm:text-base text-center w-2/12 whitespace-nowrap">
             {activeTab === 'Paid Bills' ? paymentMethodBadge(order.paymentMethod || 'Unknown') : 'Not Paid'}
           </td>
-          <td className="p-3 sm:p-4 flex gap-2 justify-center items-center w-2/12">
+          <td className="p-3 sm:p-4 flex gap-2 justify-center items-center min-w-fit mx-auto">
             <button
               className="p-2 rounded text-white hover:bg-blue-700 transition-colors"
               style={{ backgroundColor: '#2563eb' }}
@@ -621,7 +621,7 @@ function OperatorDashboard() {
           <td className="p-3 sm:p-4 text-sm sm:text-base text-center"> </td>
           <td className="p-3 sm:p-4 text-sm sm:text-base text-center"> </td>
           <td className="p-3 sm:p-4 text-sm sm:text-base text-center"> </td>
-          <td className="p-3 sm:p-4 text-sm sm:text-base"> </td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base min-w-fit mx-auto"> </td>
         </tr>
       );
     }
@@ -995,13 +995,13 @@ function OperatorDashboard() {
                         <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-1/12">Table</th>
                         <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-1/12">Order number</th>
                         <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center hidden md:table-cell w-1/12">Date</th>
-                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold w-3/12">Items</th>
+                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-3/12">Items</th>
                         <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-1/12">Total</th>
                         <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-1/12">Status</th>
                         <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-2/12">
                           {activeTab === 'Paid Bills' ? 'Paid by' : 'Payment'}
                         </th>
-                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-2/12">Actions</th>
+                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center min-w-fit">Actions</th>
                       </tr>
                     </thead>
                     <tbody>
