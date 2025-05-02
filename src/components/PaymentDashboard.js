@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, BarChart, Bar, PieChart, Pie, Cell } from 'recharts';
-import { FaFileExport, FaRupeeSign, FaChartBar, FaUtensils, FaTable, FaClock, FaChartLine } from 'react-icons/fa';
+import { FaFileExport, FaRupeeSign, FaChartBar, FaUtensils, FaTable, FaClock, FaChartLine, FaCreditCard, FaUsers } from 'react-icons/fa';
 
 function PaymentDashboard() {
   const [orders, setOrders] = useState([]);
@@ -16,11 +16,17 @@ function PaymentDashboard() {
   const [activeTab] = useState('Analytics');
   const [analytics, setAnalytics] = useState({
     revenue: { today: 0, week: 0, month: 0 },
-    orderCount: { total: 0, pending: 0, prepared: 0, completed: 0 },
+    orderCounts: {
+      today: { total: 0, pending: 0, prepared: 0, completed: 0 },
+      week: { total: 0, pending: 0, prepared: 0, completed: 0 },
+      month: { total: 0, pending: 0, prepared: 0, completed: 0 },
+      year: { total: 0, pending: 0, prepared: 0, completed: 0 }
+    },
     topItems: [],
-    slowItems: [],
     peakHours: [],
-    categories: []
+    categories: [],
+    paymentMethods: {},
+    repeatOrderPercentage: 0
   });
 
   const fetchOrders = () => {
@@ -141,7 +147,32 @@ function PaymentDashboard() {
     };
   }).reverse();
 
+  const calculateAOV = () => {
+    const periods = [
+      { name: 'today', start: new Date().setHours(0, 0, 0, 0) },
+      { name: 'week', start: new Date().setDate(new Date().getDate() - new Date().getDay()) },
+      { name: 'month', start: new Date(new Date().getFullYear(), new Date().getMonth(), 1) },
+      { name: 'year', start: new Date(new Date().getFullYear(), 0, 1) }
+    ];
+
+    return periods.map(period => {
+      const periodOrders = orders.filter(o => new Date(o.createdAt) >= new Date(period.start) && o.status === 'Completed');
+      const totalRevenue = periodOrders.reduce(
+        (sum, o) => sum + o.items.reduce((s, i) => s + (i.quantity * (i.itemId ? i.itemId.price : 0)), 0),
+        0
+      );
+      const orderCount = periodOrders.length;
+      return {
+        label: period.name.charAt(0).toUpperCase() + period.name.slice(1),
+        value: orderCount ? (totalRevenue / orderCount).toFixed(2) : 0,
+        color: period.name === 'today' ? '#fef3c7' : period.name === 'week' ? '#ffedd5' : period.name === 'month' ? '#fee2e2' : '#e9d5ff'
+      };
+    });
+  };
+
   const COLORS = ['#f59e0b', '#10b981', '#3b82f6', '#ef4444', '#8b5cf6'];
+
+  const totalCategoryRevenue = analytics.categories.reduce((sum, cat) => sum + cat.revenue, 0);
 
   return (
     <div className="min-h-screen bg-orange-50 p-4 sm:p-6">
@@ -201,32 +232,39 @@ function PaymentDashboard() {
           </div>
         </div>
 
-        {/* Order Count */}
-        <div className="mb-8 border-b-2 border-gray-200 pb-6">
-          <h3 className="text-lg font-medium mb-4 flex items-center text-gray-700">
-            <FaTable className="mr-2" /> Today’s Orders
-          </h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-            {[
-              { label: 'Total', value: analytics.orderCount.total, icon: <FaTable className="mr-3 text-blue-600 text-xl" />, color: '#fef3c7' },
-              { label: 'Pending', value: analytics.orderCount.pending, icon: <FaClock className="mr-3 text-red-600 text-xl" />, color: '#ffedd5' },
-              { label: 'Prepared', value: analytics.orderCount.prepared, icon: <FaChartLine className="mr-3 text-green-600 text-xl" />, color: '#fee2e2' },
-              { label: 'Completed', value: analytics.orderCount.completed, icon: <FaChartLine className="mr-3 text-blue-600 text-xl" />, color: '#fef3c7' }
-            ].map((metric, index) => (
-              <div
-                key={index}
-                className="p-4 rounded-lg shadow-sm transition-colors flex items-center hover:bg-amber-50"
-                style={{ backgroundColor: metric.color }}
-              >
-                {metric.icon}
-                <div>
-                  <p className="text-gray-600 text-sm">{metric.label}</p>
-                  <p className="text-xl sm:text-2xl font-bold text-gray-800">{metric.value}</p>
+        {/* Order Counts */}
+        {[
+          { period: 'Today', data: analytics.orderCounts.today },
+          { period: 'This Week', data: analytics.orderCounts.week },
+          { period: 'This Month', data: analytics.orderCounts.month },
+          { period: 'This Year', data: analytics.orderCounts.year }
+        ].map((period, index) => (
+          <div key={index} className="mb-8 border-b-2 border-gray-200 pb-6">
+            <h3 className="text-lg font-medium mb-4 flex items-center text-gray-700">
+              <FaTable className="mr-2" /> {period.period}’s Orders
+            </h3>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {[
+                { label: 'Total', value: period.data.total, icon: <FaTable className="mr-3 text-blue-600 text-xl" />, color: '#fef3c7' },
+                { label: 'Pending', value: period.data.pending, icon: <FaClock className="mr-3 text-red-600 text-xl" />, color: '#ffedd5' },
+                { label: 'Prepared', value: period.data.prepared, icon: <FaChartLine className="mr-3 text-green-600 text-xl" />, color: '#fee2e2' },
+                { label: 'Completed', value: period.data.completed, icon: <FaChartLine className="mr-3 text-blue-600 text-xl" />, color: '#fef3c7' }
+              ].map((metric, i) => (
+                <div
+                  key={i}
+                  className="p-4 rounded-lg shadow-sm transition-colors flex items-center hover:bg-amber-50"
+                  style={{ backgroundColor: metric.color }}
+                >
+                  {metric.icon}
+                  <div>
+                    <p className="text-gray-600 text-sm">{metric.label}</p>
+                    <p className="text-xl sm:text-2xl font-bold text-gray-800">{metric.value}</p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
-        </div>
+        ))}
 
         {/* Top Items */}
         <div className="mb-8 border-b-2 border-gray-200 pb-6">
@@ -256,28 +294,68 @@ function PaymentDashboard() {
           )}
         </div>
 
-        {/* Slow-Moving Items */}
+        {/* Average Order Value */}
         <div className="mb-8 border-b-2 border-gray-200 pb-6">
           <h3 className="text-lg font-medium mb-4 flex items-center text-gray-700">
-            <FaUtensils className="mr-2" /> Slow-Moving Items (This Week)
+            <FaRupeeSign className="mr-2" /> Average Order Value
           </h3>
-          {analytics.slowItems.length === 0 ? (
-            <p className="text-gray-600">No data available.</p>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {analytics.slowItems.map((item, index) => (
-                <div
-                  key={index}
-                  className="p-4 rounded-lg shadow-sm transition-colors flex items-center hover:bg-amber-50"
-                  style={{ backgroundColor: '#ffedd5' }}
-                >
-                  <FaRupeeSign className="mr-3 text-red-600 text-xl" />
-                  <div>
-                    <p className="text-gray-800 font-medium">{item.name}</p>
-                    <p className="text-gray-600 text-sm">{item.quantity} sold</p>
-                  </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            {calculateAOV().map((metric, index) => (
+              <div
+                key={index}
+                className="p-4 rounded-lg shadow-sm transition-colors flex items-center hover:bg-amber-50"
+                style={{ backgroundColor: metric.color }}
+              >
+                <FaRupeeSign className="mr-3 text-blue-600 text-xl" />
+                <div>
+                  <p className="text-gray-600 text-sm">{metric.label}</p>
+                  <p className="text-xl sm:text-2xl font-bold flex items-center text-gray-800">
+                    <FaRupeeSign className="mr-1" />{metric.value}
+                  </p>
                 </div>
-              ))}
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Payment Methods */}
+        <div className="mb-8 border-b-2 border-gray-200 pb-6">
+          <h3 className="text-lg font-medium mb-4 flex items-center text-gray-700">
+            <FaCreditCard className="mr-2" /> Revenue by Payment Method (This Month)
+          </h3>
+          {Object.keys(analytics.paymentMethods).length === 0 ? (
+            <p className="text-gray-600">
+              No payment method data available. Update the backend to include paymentMethod in orders.
+            </p>
+          ) : (
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={Object.entries(analytics.paymentMethods).map(([method, revenue]) => ({ method, revenue }))}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="method" />
+                <YAxis />
+                <Tooltip formatter={(value) => [<FaRupeeSign className="inline mr-1" />, value.toFixed(2)]} />
+                <Bar dataKey="revenue" fill="#10b981" />
+              </BarChart>
+            </ResponsiveContainer>
+          )}
+        </div>
+
+        {/* Repeat Orders */}
+        <div className="mb-8 border-b-2 border-gray-200 pb-6">
+          <h3 className="text-lg font-medium mb-4 flex items-center text-gray-700">
+            <FaUsers className="mr-2" /> Repeat Orders (This Month)
+          </h3>
+          {analytics.repeatOrderPercentage === 0 ? (
+            <p className="text-gray-600">
+              No repeat order data available. Update the backend to include customerId in orders.
+            </p>
+          ) : (
+            <div className="p-4 rounded-lg shadow-sm transition-colors flex items-center hover:bg-amber-50" style={{ backgroundColor: '#fef3c7' }}>
+              <FaUsers className="mr-3 text-blue-600 text-xl" />
+              <div>
+                <p className="text-gray-600 text-sm">Percentage of Repeat Orders</p>
+                <p className="text-xl sm:text-2xl font-bold text-gray-800">{analytics.repeatOrderPercentage}%</p>
+              </div>
             </div>
           )}
         </div>
@@ -319,9 +397,12 @@ function PaymentDashboard() {
 
           {/* Category Performance */}
           <div className="p-4 rounded-lg shadow-sm bg-white">
-            <h3 className="text-lg font-medium mb-4 flex items-center text-gray-700">
-              <FaChartBar className="mr-2" /> Category Performance (This Month)
+            <h3 className="text-lg font-medium mb-2 flex items-center text-gray-700">
+              <FaChartBar className="mr-2" /> Menu Category Revenue Breakdown (This Month)
             </h3>
+            <p className="text-gray-600 text-sm mb-4">
+              Shows the revenue contribution and order count for each menu category (e.g., Main Course, Drinks) this month.
+            </p>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
@@ -331,13 +412,24 @@ function PaymentDashboard() {
                   cx="50%"
                   cy="50%"
                   outerRadius={100}
-                  label
+                  label={({ name, revenue }) => `${name}: ${(revenue / totalCategoryRevenue * 100).toFixed(1)}%`}
                 >
                   {analytics.categories.map((entry, index) => (
                     <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                   ))}
                 </Pie>
-                <Tooltip formatter={(value) => [<FaRupeeSign className="inline mr-1" />, value.toFixed(2)]} />
+                <Tooltip
+                  formatter={(value, name, props) => [
+                    <span>
+                      <FaRupeeSign className="inline mr-1" />
+                      {value.toFixed(2)}
+                      <br />
+                      Orders: {props.payload.orders}
+                      <br />
+                      Percentage: {(value / totalCategoryRevenue * 100).toFixed(1)}%
+                    </span>
+                  ]}
+                />
               </PieChart>
             </ResponsiveContainer>
           </div>
