@@ -433,15 +433,13 @@ function OperatorDashboard() {
                 if (popover) {
                   const viewportHeight = window.innerHeight;
                   const viewportWidth = window.innerWidth;
-                  const popoverHeight = popover.offsetHeight || 200; // Estimate if not rendered
+                  const popoverHeight = popover.offsetHeight || 200;
                   const popoverWidth = popover.offsetWidth || 200;
                   let top = rect.bottom + window.scrollY + 8;
                   let left = rect.left + window.scrollX;
-                  // Place above if not enough space below
                   if (rect.bottom + popoverHeight > viewportHeight) {
                     top = rect.top + window.scrollY - popoverHeight - 8;
                   }
-                  // Adjust left to stay within viewport
                   if (left + popoverWidth > viewportWidth) {
                     left = viewportWidth - popoverWidth - 8;
                   }
@@ -560,14 +558,14 @@ function OperatorDashboard() {
     while (rows.length < minRows) {
       rows.push(
         <tr key={`placeholder-${rows.length}`} className="border-b bg-gray-50">
-          <td className="p-3 sm:p-4 text-sm sm:text-base">&nbsp;</td>
-          <td className="p-3 sm:p-4 text-sm sm:text-base">&nbsp;</td>
-          <td className="p-3 sm:p-4 text-sm sm:text-base hidden md:table-cell">&nbsp;</td>
-          <td className="p-3 sm:p-4 text-sm sm:text-base">&nbsp;</td>
-          <td className="p-3 sm:p-4 text-sm sm:text-base">&nbsp;</td>
-          <td className="p-3 sm:p-4 text-sm sm:text-base">&nbsp;</td>
-          <td className="p-3 sm:p-4 text-sm sm:text-base">&nbsp;</td>
-          <td className="p-3 sm:p-4 text-sm sm:text-base">&nbsp;</td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base"> </td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base"> </td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base hidden md:table-cell"> </td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base"> </td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base"> </td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base"> </td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base"> </td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base"> </td>
         </tr>
       );
     }
@@ -939,31 +937,31 @@ function OperatorDashboard() {
           {/* Edit Order Modal */}
           {editingOrder && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div ref={modalRef} className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-lg sm:max-w-2xl">
-                <h2 className="text-xl sm:text-2xl font-bold mb-4 sm:mb-6 flex items-center text-gray-800">
-                  <FaEdit className="mr-3 text-amber-600 text-2xl sm:text-3xl" /> Edit Order - Table {editingOrder.tableNumber}
+              <div ref={modalRef} className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md sm:max-w-lg md:max-w-2xl max-h-[90vh] flex flex-col">
+                <h2 className="text-lg sm:text-xl font-bold mb-4 sm:mb-6 flex items-center text-gray-800">
+                  <FaEdit className="mr-3 text-amber-600 text-xl sm:text-2xl" /> Edit Order - Table {editingOrder.tableNumber}
                 </h2>
-                <div className="space-y-4 sm:space-y-6">
+                <div className="flex-1 overflow-y-auto space-y-4 sm:space-y-6 pb-6 sm:pb-8">
                   <div>
-                    <label className="block text-gray-700 text-base sm:text-lg font-medium" htmlFor="table-number">Table Number</label>
+                    <label className="block text-gray-700 text-sm sm:text-base font-medium" htmlFor="table-number">Table Number</label>
                     <input
                       id="table-number"
                       type="number"
                       min="1"
                       value={editingOrder.tableNumber}
                       onChange={e => setEditingOrder({ ...editingOrder, tableNumber: parseInt(e.target.value) || 1 })}
-                      className="w-full border rounded-lg px-3 py-2 sm:px-4 sm:py-3 text-base sm:text-lg focus:ring-2 focus:ring-amber-500"
+                      className="w-full border rounded-lg px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base focus:ring-2 focus:ring-amber-500"
                       aria-label="Change table number"
                     />
                   </div>
                   {editingOrder.status !== 'Pending' && (
                     <div>
-                      <label className="block text-gray-700 text-base sm:text-lg font-medium" htmlFor="payment-method">Paid By</label>
+                      <label className="block text-gray-700 text-sm sm:text-base font-medium" htmlFor="payment-method">Paid By</label>
                       <select
                         id="payment-method"
                         value={editingOrder.paymentMethod}
                         onChange={e => setEditingOrder({ ...editingOrder, paymentMethod: e.target.value })}
-                        className="w-full border rounded-lg px-3 py-2 sm:px-4 sm:py-3 text-base sm:text-lg focus:ring-2 focus:ring-amber-500"
+                        className="w-full border rounded-lg px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base focus:ring-2 focus:ring-amber-500"
                         aria-label="Select payment method"
                         disabled={editingOrder.status === 'Prepared'}
                       >
@@ -977,12 +975,12 @@ function OperatorDashboard() {
                   )}
                   {(editingOrder.status === 'Pending' || editingOrder.status === 'Prepared') && (
                     <div>
-                      <label className="block text-gray-700 text-base sm:text-lg font-medium" htmlFor="order-status">Order Status</label>
+                      <label className="block text-gray-700 text-sm sm:text-base font-medium" htmlFor="order-status">Order Status</label>
                       <select
                         id="order-status"
                         value={editingOrder.status}
                         onChange={e => setEditingOrder({ ...editingOrder, status: e.target.value })}
-                        className="w-full border rounded-lg px-3 py-2 sm:px-4 sm:py-3 text-base sm:text-lg focus:ring-2 focus:ring-amber-500"
+                        className="w-full border rounded-lg px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base focus:ring-2 focus:ring-amber-500"
                         aria-label="Change order status"
                       >
                         <option value="Pending">New</option>
@@ -992,11 +990,11 @@ function OperatorDashboard() {
                     </div>
                   )}
                   <div>
-                    <label className="block text-gray-700 text-base sm:text-lg font-medium mb-2">Items</label>
+                    <label className="block text-gray-700 text-sm sm:text-base font-medium mb-2">Items</label>
                     {editingOrder.items.map((item, index) => (
                       <div key={index} className="flex flex-col sm:flex-row items-start sm:items-center space-y-2 sm:space-y-0 sm:space-x-4 mb-4 flex-wrap gap-4">
                         <select
-                          className="flex-1 border rounded-lg px-3 py-2 sm:px-4 sm:py-3 text-base sm:text-lg focus:ring-2 focus:ring-amber-500"
+                          className="flex-1 border rounded-lg px-3 py-2 sm:px-4 sm:py-3 text-sm sm:text-base focus:ring-2 focus:ring-amber-500"
                           value={item.itemId}
                           onChange={e => {
                             const newItem = menuItems.find(m => m._id === e.target.value);
@@ -1020,7 +1018,7 @@ function OperatorDashboard() {
                         <input
                           type="number"
                           min="1"
-                          className="border rounded-lg px-3 py-2 sm:px-4 sm:py-3 w-20 text-base sm:text-lg focus:ring-2 focus:ring-amber-500"
+                          className="border rounded-lg px-3 py-2 sm:px-4 sm:py-3 w-20 text-sm sm:text-base focus:ring-2 focus:ring-amber-500"
                           value={item.quantity}
                           onChange={e => {
                             const newItems = [...editingOrder.items];
@@ -1030,7 +1028,7 @@ function OperatorDashboard() {
                           aria-label={`Quantity for item ${index + 1}`}
                         />
                         <button
-                          className="text-red-600 hover:text-red-800 text-base sm:text-lg"
+                          className="text-red-600 hover:text-red-800 text-sm sm:text-base"
                           onClick={() => {
                             const newItems = editingOrder.items.filter((_, i) => i !== index);
                             setEditingOrder({ ...editingOrder, items: newItems });
@@ -1042,7 +1040,7 @@ function OperatorDashboard() {
                       </div>
                     ))}
                     <button
-                      className="text-blue-600 hover:text-blue-800 flex items-center text-base sm:text-lg"
+                      className="text-blue-600 hover:text-blue-800 flex items-center text-sm sm:text-base"
                       onClick={() => {
                         const newItems = [
                           ...editingOrder.items,
@@ -1056,22 +1054,22 @@ function OperatorDashboard() {
                     </button>
                   </div>
                 </div>
-                <div className="mt-6 sm:mt-8 flex flex-col sm:flex-row justify-end gap-4">
+                <div className="mt-4 sm:mt-6 flex flex-col sm:flex-row justify-end gap-4 bg-white pt-4">
                   <button
-                    className="px-4 py-2 sm:px-6 sm:py-3 rounded-lg text-white text-base sm:text-lg font-medium flex items-center justify-center hover:bg-gray-700 transition-colors"
+                    className="px-4 py-2 sm:px-6 sm:py-3 rounded-lg text-white text-sm sm:text-base font-medium flex items-center justify-center hover:bg-gray-700 transition-colors"
                     style={{ backgroundColor: '#4b5563' }}
                     onClick={() => setEditingOrder(null)}
                     aria-label="Cancel changes"
                   >
-                    <FaTimes className="mr-2 text-lg sm:text-xl" /> Cancel
+                    <FaTimes className="mr-2 text-base sm:text-lg" /> Cancel
                   </button>
                   <button
-                    className="px-4 py-2 sm:px-6 sm:py-3 rounded-lg text-white text-base sm:text-lg font-medium flex items-center justify-center hover:bg-amber-600 transition-colors"
+                    className="px-4 py-2 sm:px-6 sm:py-3 rounded-lg text-white text-sm sm:text-base font-medium flex items-center justify-center hover:bg-amber-600 transition-colors"
                     style={{ backgroundColor: '#b45309' }}
                     onClick={handleSaveEdit}
                     aria-label="Save changes"
                   >
-                    <FaCheck className="mr-2 text-lg sm:text-xl" /> Save
+                    <FaCheck className="mr-2 text-base sm:text-lg" /> Save
                   </button>
                 </div>
               </div>
