@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import axios from 'axios';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
-import { FaPlus, FaEdit, FaTrash, FaCheck, FaTimes, FaUtensils, FaHamburger, FaPrint, FaRupeeSign, FaFileExport, FaBars, FaClock, FaMoneyBillWave, FaMobileAlt, FaCreditCard, FaWallet, FaQuestionCircle } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaCheck, FaTimes, FaUtensils, FaHamburger, FaPrint, FaRupeeSign, FaFileExport, FaBars, FaClock, FaMoneyBillWave, FaMobileAlt, FaCreditCard, FaWallet, FaQuestionCircle, FaChartBar } from 'react-icons/fa';
 
 function OperatorDashboard() {
   const [orders, setOrders] = useState([]);
@@ -27,6 +27,10 @@ function OperatorDashboard() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [startDate, setStartDate] = useState(new Date(new Date().setDate(new Date().getDate() - 1)));
   const [endDate, setEndDate] = useState(new Date());
+  const [reportStartDate, setReportStartDate] = useState(new Date(new Date().setDate(new Date().getDate() - 1)));
+  const [reportEndDate, setReportEndDate] = useState(new Date());
+  const [reportStatusFilter, setReportStatusFilter] = useState('Completed');
+  const [reportPaymentFilter, setReportPaymentFilter] = useState('All');
   const [showItemsPopover, setShowItemsPopover] = useState(null);
   const [showPaymentModal, setShowPaymentModal] = useState(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
@@ -338,18 +342,18 @@ function OperatorDashboard() {
   };
 
   const exportRevenueCSV = () => {
-    // Define today's date boundaries (May 02, 2025, 12:00 AM to 11:59 PM)
-    const todayStart = new Date('2025-05-02T00:00:00');
-    const todayEnd = new Date('2025-05-02T23:59:59');
-
-    // Filter orders for today with status 'Completed'
-    const todayOrders = orders.filter(order => {
+    // Filter orders based on selected filters
+    const filteredOrders = orders.filter(order => {
       const orderDate = new Date(order.createdAt);
-      return (
-        order.status === 'Completed' &&
-        orderDate >= todayStart &&
-        orderDate <= todayEnd
-      );
+      const matchesDate =
+        orderDate >= new Date(reportStartDate.setHours(0, 0, 0, 0)) &&
+        orderDate <= new Date(reportEndDate.setHours(23, 59, 59, 999));
+      const matchesStatus = reportStatusFilter === 'All' || order.status === reportStatusFilter;
+      const matchesPayment =
+        reportPaymentFilter === 'All' ||
+        order.paymentMethod === reportPaymentFilter ||
+        (reportPaymentFilter === 'Unknown' && !order.paymentMethod);
+      return matchesDate && matchesStatus && matchesPayment;
     });
 
     // Format items for each order
@@ -373,25 +377,29 @@ function OperatorDashboard() {
 
     // Create CSV content
     const csvContent = [
-      ['Order Number', 'Date and Time', 'Items', 'Total (₹)'], // Headers
-      ...todayOrders.map(order => [
+      ['Order Number', 'Date and Time', 'Items', 'Total (₹)', 'Status', 'Payment Method'], // Headers
+      ...filteredOrders.map(order => [
         order.orderNumber,
         formatDateTime(order.createdAt),
         formatItems(order.items),
         order.items
           .reduce((sum, item) => sum + (item.itemId ? item.quantity * item.itemId.price : 0), 0)
-          .toFixed(2)
+          .toFixed(2),
+        order.status,
+        order.paymentMethod || 'Unknown'
       ])
     ]
       .map(row => row.map(cell => `"${cell}"`).join(',')) // Wrap each cell in quotes to handle commas in items
       .join('\n');
 
     // Generate and download the CSV file
+    const startFormatted = formatDateTime(reportStartDate).split(' ')[0].replace(/\//g, '-');
+    const endFormatted = formatDateTime(reportEndDate).split(' ')[0].replace(/\//g, '-');
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `GSahebCafe_DetailedSales_2025-05-02.csv`;
+    a.download = `GSahebCafe_SalesReport_${startFormatted}_to_${endFormatted}.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -454,16 +462,20 @@ function OperatorDashboard() {
       rows.push(
         <tr
           key={order._id}
-          className={`${
-            newOrderIds.has(order._id) ? 'animate-pulse bg-amber-200 border-l-4 border-amber-500' : ''
-          }`}
+          className={`border-b ${
+            newOrderIds.has(order._id)
+              ? 'animate-pulse bg-amber-200 border-l-4 border-amber-500'
+              : index % 2 === 0
+              ? 'bg-gray-50'
+              : 'bg-white'
+          } hover:bg-gray-100`}
         >
-          <td className="p-2 sm:p-3 text-sm sm:text-base">Table {order.tableNumber}</td>
-          <td className="p-2 sm:p-3 text-sm sm:text-base">#{order.orderNumber}</td>
-          <td className="p-2 sm:p-3 text-sm sm:text-base hidden md:table-cell">
+          <td className="p-3 sm:p-4 text-sm sm:text-base text-center w-1/12">Table {order.tableNumber}</td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base text-center w-1/12">#{order.orderNumber}</td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base text-center hidden md:table-cell w-1/12">
             {new Date(order.createdAt).toLocaleDateString()}
           </td>
-          <td className="p-2 sm:p-3 text-sm sm:text-base relative">
+          <td className="p-3 sm:p-4 text-sm sm:text-base w-4/12 relative">
             <button
               className="items-button text-blue-600 hover:underline"
               onMouseEnter={(e) => {
@@ -498,7 +510,7 @@ function OperatorDashboard() {
             {showItemsPopover === order._id && (
               <div
                 id={`popover-${order._id}`}
-                className="items-popover absolute z-30 bg-white border rounded-lg p-2 max-w-[80vw] sm:max-w-xs w-full"
+                className="items-popover absolute z-30 bg-white border rounded-lg p-2 max-w-[80vw] sm:max-w-xs w-full shadow-lg"
               >
                 <ul className="list-disc pl-4 space-y-1 text-sm">
                   {order.items.map((item, index) => (
@@ -511,13 +523,13 @@ function OperatorDashboard() {
               </div>
             )}
           </td>
-          <td className="p-2 sm:p-3 text-sm sm:text-base">
+          <td className="p-3 sm:p-4 text-sm sm:text-base text-center w-1/12">
             ₹{order.items
               .reduce((sum, item) => sum + (item.itemId ? item.quantity * item.itemId.price : 0), 0)
               .toFixed(2)}
           </td>
           <td
-            className={`p-2 sm:p-3 text-sm sm:text-base ${
+            className={`p-3 sm:p-4 text-sm sm:text-base text-center w-1/12 ${
               order.status === 'Pending'
                 ? 'text-red-600'
                 : order.status === 'Prepared'
@@ -527,12 +539,12 @@ function OperatorDashboard() {
           >
             {order.status === 'Pending' ? 'New' : order.status === 'Prepared' ? 'Served' : 'Paid'}
           </td>
-          <td className="p-2 sm:p-3 text-sm sm:text-base">
+          <td className="p-3 sm:p-4 text-sm sm:text-base text-center w-1/12">
             {activeTab === 'Paid Bills' ? paymentMethodBadge(order.paymentMethod || 'Unknown') : 'Not Paid'}
           </td>
-          <td className="p-2 sm:p-3 flex gap-2">
+          <td className="p-3 sm:p-4 flex gap-2 justify-center w-2/12">
             <button
-              className="p-2 rounded text-white"
+              className="p-2 rounded text-white hover:bg-blue-700 transition-colors"
               style={{ backgroundColor: '#2563eb' }}
               onClick={() => handleEditOrder(order)}
               aria-label={`Edit order ${order.orderNumber}`}
@@ -542,7 +554,7 @@ function OperatorDashboard() {
             {order.status === 'Pending' && (
               <>
                 <button
-                  className="p-2 rounded text-white"
+                  className="p-2 rounded text-white hover:bg-green-700 transition-colors"
                   style={{ backgroundColor: '#16a34a' }}
                   onClick={() => handleStatusUpdate(order._id, 'Prepared')}
                   aria-label={`Mark order ${order.orderNumber} as served`}
@@ -550,7 +562,7 @@ function OperatorDashboard() {
                   <FaCheck />
                 </button>
                 <button
-                  className="p-2 rounded text-white"
+                  className="p-2 rounded text-white hover:bg-red-700 transition-colors"
                   style={{ backgroundColor: '#dc2626' }}
                   onClick={() => handleCancelOrder(order._id)}
                   aria-label={`Cancel order ${order.orderNumber}`}
@@ -562,7 +574,7 @@ function OperatorDashboard() {
             {order.status === 'Prepared' && (
               <>
                 <button
-                  className="p-2 rounded text-white"
+                  className="p-2 rounded text-white hover:bg-blue-900 transition-colors"
                   style={{ backgroundColor: '#1e40af' }}
                   onClick={() => handlePrintBill(order)}
                   aria-label={`Print receipt for order ${order.orderNumber}`}
@@ -570,7 +582,7 @@ function OperatorDashboard() {
                   <FaPrint />
                 </button>
                 <button
-                  className="p-2 rounded text-white"
+                  className="p-2 rounded text-white hover:bg-green-700 transition-colors"
                   style={{ backgroundColor: '#16a34a' }}
                   onClick={() => setShowPaymentModal(order._id)}
                   aria-label={`Mark order ${order.orderNumber} as paid`}
@@ -581,7 +593,7 @@ function OperatorDashboard() {
             )}
             {order.status === 'Completed' && (
               <button
-                className="p-2 rounded text-white"
+                className="p-2 rounded text-white hover:bg-blue-900 transition-colors"
                 style={{ backgroundColor: '#1e40af' }}
                 onClick={() => handlePrintBill(order)}
                 aria-label={`Print receipt for order ${order.orderNumber}`}
@@ -596,15 +608,15 @@ function OperatorDashboard() {
 
     while (rows.length < minRows) {
       rows.push(
-        <tr key={`placeholder-${rows.length}`}>
-          <td className="p-2 sm:p-3 text-sm sm:text-base"> </td>
-          <td className="p-2 sm:p-3 text-sm sm:text-base"> </td>
-          <td className="p-2 sm:p-3 text-sm sm:text-base hidden md:table-cell"> </td>
-          <td className="p-2 sm:p-3 text-sm sm:text-base"> </td>
-          <td className="p-2 sm:p-3 text-sm sm:text-base"> </td>
-          <td className="p-2 sm:p-3 text-sm sm:text-base"> </td>
-          <td className="p-2 sm:p-3 text-sm sm:text-base"> </td>
-          <td className="p-2 sm:p-3 text-sm sm:text-base"> </td>
+        <tr key={`placeholder-${rows.length}`} className="border-b bg-white">
+          <td className="p-3 sm:p-4 text-sm sm:text-base text-center"> </td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base text-center"> </td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base text-center hidden md:table-cell"> </td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base"> </td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base text-center"> </td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base text-center"> </td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base text-center"> </td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base"> </td>
         </tr>
       );
     }
@@ -623,13 +635,15 @@ function OperatorDashboard() {
           <h2 className="text-2xl sm:text-3xl font-bold text-gray-800 flex items-center">
             <FaUtensils className="mr-2 text-amber-600" /> GSaheb Cafe
           </h2>
+          <h3 className="text-lg sm:text-xl font-medium text-gray-600 mt-2">Operator Dashboard</h3>
         </div>
         <nav className="mt-4">
           {[
             { name: 'New Orders', icon: <FaClock className="text-2xl" /> },
             { name: 'Served Orders', icon: <FaCheck className="text-2xl" /> },
             { name: 'Paid Bills', icon: <FaRupeeSign className="text-2xl" /> },
-            { name: 'Menu', icon: <FaHamburger className="text-2xl" /> }
+            { name: 'Menu', icon: <FaHamburger className="text-2xl" /> },
+            { name: 'Reports', icon: <FaChartBar className="text-2xl" /> }
           ].map(tab => (
             <button
               key={tab.name}
@@ -661,17 +675,7 @@ function OperatorDashboard() {
             >
               <FaBars />
             </button>
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 text-center flex-1">
-              Operator Dashboard
-            </h1>
-            <button
-              className="px-4 py-2 sm:px-6 sm:py-3 rounded-lg text-white text-base sm:text-lg font-medium flex items-center hover:bg-amber-600 transition-colors shadow-sm"
-              style={{ backgroundColor: '#b45309' }}
-              onClick={exportRevenueCSV}
-              aria-label="Download sales report"
-            >
-              <FaFileExport className="mr-2 text-lg sm:text-xl" /> Sales Report
-            </button>
+            <div className="flex-1"></div>
           </div>
 
           {error && (
@@ -827,6 +831,97 @@ function OperatorDashboard() {
             </div>
           )}
 
+          {activeTab === 'Reports' && (
+            <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
+              <h2 className="text-xl sm:text-2xl font-semibold mb-4 sm:mb-6 flex items-center text-gray-800">
+                <FaChartBar className="mr-3 text-amber-600 text-2xl sm:text-3xl" /> Sales Reports
+              </h2>
+              <div className="mb-6 sm:mb-8 bg-amber-50 p-3 sm:p-4 rounded-lg shadow-sm">
+                <h3 className="text-base sm:text-lg font-medium mb-3 text-gray-700">Report Filters</h3>
+                <div className="flex flex-col sm:flex-row gap-2 sm:gap-4 items-start sm:items-center flex-wrap">
+                  <div className="flex items-center gap-2">
+                    <div className="w-40">
+                      <label className="block text-gray-700 text-sm font-medium mb-1">From</label>
+                      <DatePicker
+                        selected={reportStartDate}
+                        onChange={date => setReportStartDate(date)}
+                        maxDate={reportEndDate}
+                        className="w-full border rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-amber-500 bg-white shadow-sm"
+                        aria-label="Select report start date"
+                      />
+                    </div>
+                    <div className="w-40">
+                      <label className="block text-gray-700 text-sm font-medium mb-1">To</label>
+                      <DatePicker
+                        selected={reportEndDate}
+                        onChange={date => setReportEndDate(date)}
+                        minDate={reportStartDate}
+                        maxDate={new Date()}
+                        className="w-full border rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-amber-500 bg-white shadow-sm"
+                        aria-label="Select report end date"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-40">
+                      <label className="block text-gray-700 text-sm font-medium mb-1">Status</label>
+                      <select
+                        value={reportStatusFilter}
+                        onChange={e => setReportStatusFilter(e.target.value)}
+                        className="w-full border rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-amber-500 bg-white shadow-sm"
+                        aria-label="Select order status filter"
+                      >
+                        <option value="All">All</option>
+                        <option value="Pending">Pending</option>
+                        <option value="Prepared">Prepared</option>
+                        <option value="Completed">Completed</option>
+                      </select>
+                    </div>
+                    <div className="w-40">
+                      <label className="block text-gray-700 text-sm font-medium mb-1">Payment Method</label>
+                      <select
+                        value={reportPaymentFilter}
+                        onChange={e => setReportPaymentFilter(e.target.value)}
+                        className="w-full border rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-amber-500 bg-white shadow-sm"
+                        aria-label="Select payment method filter"
+                      >
+                        <option value="All">All</option>
+                        <option value="Cash">Cash</option>
+                        <option value="UPI">UPI</option>
+                        <option value="Card">Card</option>
+                        <option value="Other">Other</option>
+                        <option value="Unknown">Unknown</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className="px-3 py-1 rounded-lg text-white text-sm hover:bg-gray-700 transition-colors shadow-sm"
+                      style={{ backgroundColor: '#4b5563' }}
+                      onClick={() => {
+                        setReportStartDate(new Date(new Date().setDate(new Date().getDate() - 1)));
+                        setReportEndDate(new Date());
+                        setReportStatusFilter('Completed');
+                        setReportPaymentFilter('All');
+                      }}
+                      aria-label="Reset report filters"
+                    >
+                      Reset
+                    </button>
+                    <button
+                      className="px-3 py-1 rounded-lg text-white text-sm font-medium flex items-center hover:bg-amber-600 transition-colors shadow-sm"
+                      style={{ backgroundColor: '#b45309' }}
+                      onClick={exportRevenueCSV}
+                      aria-label="Generate sales report"
+                    >
+                      <FaFileExport className="mr-1 text-sm" /> Generate Report
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+
           {['New Orders', 'Served Orders', 'Paid Bills'].includes(activeTab) && (
             <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
               <h2 className="text-xl sm:text-2xl font-semibold mb-4 sm:mb-6 text-gray-800">
@@ -834,34 +929,32 @@ function OperatorDashboard() {
               </h2>
 
               {activeTab === 'Paid Bills' && (
-                <div className="mb-6 sm:mb-8 bg-amber-50 p-4 sm:p-6 rounded-lg shadow-sm">
-                  <h3 className="text-base sm:text-lg font-medium mb-4 text-gray-700">Date Filter</h3>
-                  <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center">
-                    <div className="flex flex-col sm:flex-row gap-4 w-full sm:w-auto">
-                      <div className="w-full sm:w-48">
-                        <label className="block text-gray-700 text-sm sm:text-base font-medium mb-1">From</label>
-                        <DatePicker
-                          selected={startDate}
-                          onChange={date => setStartDate(date)}
-                          maxDate={endDate}
-                          className="w-full border rounded-lg px-3 py-2 text-sm sm:text-base focus:ring-2 focus:ring-amber-500 bg-white shadow-sm"
-                          aria-label="Select start date"
-                        />
-                      </div>
-                      <div className="w-full sm:w-48">
-                        <label className="block text-gray-700 text-sm sm:text-base font-medium mb-1">To</label>
-                        <DatePicker
-                          selected={endDate}
-                          onChange={date => setEndDate(date)}
-                          minDate={startDate}
-                          maxDate={new Date()}
-                          className="w-full border rounded-lg px-3 py-2 text-sm sm:text-base focus:ring-2 focus:ring-amber-500 bg-white shadow-sm"
-                          aria-label="Select end date"
-                        />
-                      </div>
+                <div className="mb-6 sm:mb-8 bg-amber-50 p-3 sm:p-4 rounded-lg shadow-sm">
+                  <h3 className="text-base sm:text-lg font-medium mb-3 text-gray-700">Date Filter</h3>
+                  <div className="flex items-center gap-2 sm:gap-4">
+                    <div className="w-40">
+                      <label className="block text-gray-700 text-sm font-medium mb-1">From</label>
+                      <DatePicker
+                        selected={startDate}
+                        onChange={date => setStartDate(date)}
+                        maxDate={endDate}
+                        className="w-full border rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-amber-500 bg-white shadow-sm"
+                        aria-label="Select start date"
+                      />
+                    </div>
+                    <div className="w-40">
+                      <label className="block text-gray-700 text-sm font-medium mb-1">To</label>
+                      <DatePicker
+                        selected={endDate}
+                        onChange={date => setEndDate(date)}
+                        minDate={startDate}
+                        maxDate={new Date()}
+                        className="w-full border rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-amber-500 bg-white shadow-sm"
+                        aria-label="Select end date"
+                      />
                     </div>
                     <button
-                      className="px-4 py-2 rounded-lg text-white text-sm sm:text-base hover:bg-gray-700 transition-colors shadow-sm w-full sm:w-auto"
+                      className="px-3 py-1 rounded-lg text-white text-sm hover:bg-gray-700 transition-colors shadow-sm mt-6"
                       style={{ backgroundColor: '#4b5563' }}
                       onClick={() => {
                         setStartDate(new Date(new Date().setDate(new Date().getDate() - 1)));
@@ -876,8 +969,8 @@ function OperatorDashboard() {
               )}
 
               {activeTab === 'Paid Bills' && (
-                <div className="mb-6 sm:mb-8 bg-amber-50 p-4 sm:p-6 rounded-lg shadow-sm">
-                  <h3 className="text-base sm:text-lg font-medium mb-4 text-gray-700">Payment Summary</h3>
+                <div className="mb-6 sm:mb-8 bg-amber-50 p-3 sm:p-4 rounded-lg shadow-sm">
+                  <h3 className="text-base sm:text-lg font-medium mb-3 text-gray-700">Payment Summary</h3>
                   <div className="flex flex-wrap gap-4">
                     {Object.entries(paymentMethodSummary).map(([method, revenue]) => (
                       <div key={method} className="flex items-center">
@@ -891,19 +984,19 @@ function OperatorDashboard() {
 
               <div className="overflow-x-auto">
                 <div className="min-h-[400px] max-h-[400px] overflow-y-auto">
-                  <table className="min-w-full text-left">
-                    <thead className="sticky top-0 bg-gray-200">
+                  <table className="min-w-full text-left border-separate" style={{ borderSpacing: '0 4px' }}>
+                    <thead className="sticky top-0 bg-amber-100">
                       <tr>
-                        <th className="p-2 sm:p-3 text-sm sm:text-base font-medium w-1/12">TABLE</th>
-                        <th className="p-2 sm:p-3 text-sm sm:text-base font-medium w-1/12">ORDER NUMBER</th>
-                        <th className="p-2 sm:p-3 text-sm sm:text-base font-medium w-1/12 hidden md:table-cell">DATE</th>
-                        <th className="p-2 sm:p-3 text-sm sm:text-base font-medium w-4/12">ITEMS</th>
-                        <th className="p-2 sm:p-3 text-sm sm:text-base font-medium w-1/12">TOTAL</th>
-                        <th className="p-2 sm:p-3 text-sm sm:text-base font-medium w-1/12">STATUS</th>
-                        <th className="p-2 sm:p-3 text-sm sm:text-base font-medium w-1/12">
+                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-1/12">TABLE</th>
+                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-1/12">ORDER NUMBER</th>
+                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center hidden md:table-cell w-1/12">DATE</th>
+                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold w-4/12">ITEMS</th>
+                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-1/12">TOTAL</th>
+                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-1/12">STATUS</th>
+                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-1/12">
                           {activeTab === 'Paid Bills' ? 'PAID BY' : 'PAYMENT'}
                         </th>
-                        <th className="p-2 sm:p-3 text-sm sm:text-base font-medium w-2/12">ACTIONS</th>
+                        <th className="p-3 sm:p-4 text-sm sm:text-base font-semibold text-center w-2/12">ACTIONS</th>
                       </tr>
                     </thead>
                     <tbody>
