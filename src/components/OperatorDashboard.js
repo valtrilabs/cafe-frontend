@@ -5,7 +5,7 @@ import { FaPlus, FaEdit, FaTrash, FaCheck, FaTimes, FaUtensils, FaList, FaClock,
 function OperatorDashboard() {
   const [orders, setOrders] = useState([]);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('Today');
+  const [activeTab, setActiveTab] = useState('Pending');
   const [editingOrder, setEditingOrder] = useState(null);
   const [menuItems, setMenuItems] = useState([]);
   const [newOrderIds, setNewOrderIds] = useState(new Set());
@@ -22,14 +22,12 @@ function OperatorDashboard() {
     try {
       const now = new Date();
       const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-      const url = tab === 'Today'
-        ? `https://cafe-backend-ay2n.onrender.com/api/orders?dateFrom=${todayStart.toISOString()}&dateTo=${now.toISOString()}`
-        : tab === 'Past Orders'
+      const url = tab === 'Past Orders'
         ? `https://cafe-backend-ay2n.onrender.com/api/orders?dateTo=${todayStart.toISOString()}`
         : `https://cafe-backend-ay2n.onrender.com/api/orders?status=${tab.toLowerCase()}`;
       const res = await axios.get(url);
       console.log('Orders fetched:', res.data);
-      const newOrders = res.data.filter(order => order.tableNumber != null); // Filter invalid orders
+      const newOrders = res.data.filter(order => order.tableNumber != null);
       const sortedOrders = newOrders.sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
       if (orders.length > 0) {
         const currentIds = new Set(orders.map(o => o._id));
@@ -57,21 +55,21 @@ function OperatorDashboard() {
 
   const fetchMenuItems = async () => {
     try {
-      const res = await axios.get('https://cafe-backend-ay2n.onrender.com/api/menu');
-      console.log('Menu items fetched:', res.data);
+      const res = await axios.get('https://cafe-backend-ay2n.onrender.com/api/menu/operator');
+      console.log('Menu items fetched for operator:', res.data);
       setMenuItems(res.data);
       setError(null);
     } catch (err) {
-      console.error('Error fetching menu:', err);
+      console.error('Error fetching menu for operator:', err);
       setError('Failed to load menu items.');
     }
   };
 
   useEffect(() => {
-    fetchOrders('Today');
+    fetchOrders('Pending');
     fetchMenuItems();
     const interval = setInterval(() => {
-      fetchOrders(activeTab === 'Today' ? 'Today' : activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
+      fetchOrders(activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
     }, 30000);
     return () => clearInterval(interval);
   }, [activeTab]);
@@ -79,7 +77,7 @@ function OperatorDashboard() {
   const handleStatusUpdate = async (orderId, status) => {
     try {
       await axios.put(`https://cafe-backend-ay2n.onrender.com/api/orders/${orderId}`, { status });
-      await fetchOrders(activeTab === 'Today' ? 'Today' : activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
+      await fetchOrders(activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
       setError(null);
     } catch (err) {
       console.error('Error updating order:', err);
@@ -112,7 +110,7 @@ function OperatorDashboard() {
         })),
         status: editingOrder.status
       });
-      await fetchOrders(activeTab === 'Today' ? 'Today' : activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
+      await fetchOrders(activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
       setEditingOrder(null);
       setError(null);
     } catch (err) {
@@ -125,7 +123,7 @@ function OperatorDashboard() {
     if (window.confirm('Are you sure you want to cancel this order?')) {
       try {
         await axios.delete(`https://cafe-backend-ay2n.onrender.com/api/orders/${orderId}`);
-        await fetchOrders(activeTab === 'Today' ? 'Today' : activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
+        await fetchOrders(activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
         setError(null);
       } catch (err) {
         console.error('Error canceling order:', err);
@@ -139,7 +137,7 @@ function OperatorDashboard() {
     printWindow.document.write(`
       <html>
         <head>
-          <title>Bill - GSaheb Cafe</title>
+          <title>Receipt - GSaheb Cafe</title>
           <style>
             @media print {
               @page { margin: 0; size: 80mm auto; }
@@ -261,9 +259,7 @@ function OperatorDashboard() {
     }
   };
 
-  const filteredOrders = orders.filter(order => 
-    activeTab === 'Past Orders' || activeTab === 'Today' ? true : order.status === activeTab
-  );
+  const filteredOrders = activeTab === 'Past Orders' ? orders : orders.filter(order => order.status === activeTab);
 
   return (
     <div className="min-h-screen bg-gray-100 p-4 sm:p-6">
@@ -278,7 +274,6 @@ function OperatorDashboard() {
       {/* Tabs */}
       <div className="flex flex-wrap justify-center gap-2 sm:gap-4 mb-6 bg-white rounded-lg shadow-md p-4">
         {[
-          { name: 'Today', icon: <FaClock /> },
           { name: 'Pending', icon: <FaClock /> },
           { name: 'Prepared', icon: <FaCheck /> },
           { name: 'Completed', icon: <FaCheck /> },
@@ -473,7 +468,7 @@ function OperatorDashboard() {
       )}
 
       {/* Orders */}
-      {['Today', 'Pending', 'Prepared', 'Completed', 'Past Orders'].includes(activeTab) && (
+      {['Pending', 'Prepared', 'Completed', 'Past Orders'].includes(activeTab) && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
           {filteredOrders.length === 0 ? (
             <p className="text-center col-span-full text-gray-600">
@@ -541,15 +536,25 @@ function OperatorDashboard() {
                       </button>
                     </>
                   )}
-                  {order.status === 'Completed' && (
-                    <button
-                      className="w-full px-3 py-2 rounded-lg text-white flex items-center justify-center text-sm hover:bg-blue-600 transition-colors"
-                      style={{ backgroundColor: '#1e40af' }}
-                      onClick={() => handlePrintBill(order)}
-                      aria-label={`Print bill for order ${order.orderNumber}`}
-                    >
-                      <FaPrint className="mr-2" /> Print Bill
-                    </button>
+                  {order.status === 'Prepared' && (
+                    <>
+                      <button
+                        className="w-full px-3 py-2 rounded-lg text-white flex items-center justify-center text-sm hover:bg-blue-600 transition-colors"
+                        style={{ backgroundColor: '#1e40af' }}
+                        onClick={() => handlePrintBill(order)}
+                        aria-label={`Print receipt for order ${order.orderNumber}`}
+                      >
+                        <FaPrint className="mr-2" /> Print Receipt
+                      </button>
+                      <button
+                        className="w-full px-3 py-2 rounded-lg text-white flex items-center justify-center text-sm hover:bg-green-700 transition-colors"
+                        style={{ backgroundColor: '#16a34a' }}
+                        onClick={() => handleStatusUpdate(order._id, 'Completed')}
+                        aria-label={`Mark order ${order.orderNumber} as completed`}
+                      >
+                        <FaCheck className="mr-2" /> Mark as Completed
+                      </button>
+                    </>
                   )}
                 </div>
               </div>
@@ -566,6 +571,33 @@ function OperatorDashboard() {
               <FaEdit className="mr-2 text-amber-600" /> Edit Order - Table {editingOrder.tableNumber} (Order #{editingOrder.orderNumber})
             </h2>
             <div className="space-y-4">
+              <div>
+                <label className="block text-gray-700 text-sm font-medium" htmlFor="table-number">Table Number</label>
+                <input
+                  id="table-number"
+                  type="number"
+                  min="1"
+                  value={editingOrder.tableNumber}
+                  onChange={e => setEditingOrder({ ...editingOrder, tableNumber: parseInt(e.target.value) || 1 })}
+                  className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500"
+                  aria-label="Table number"
+                />
+              </div>
+              {(editingOrder.status === 'Pending' || editingOrder.status === 'Prepared') && (
+                <div>
+                  <label className="block text-gray-700 text-sm font-medium" htmlFor="order-status">Status</label>
+                  <select
+                    id="order-status"
+                    value={editingOrder.status}
+                    onChange={e => setEditingOrder({ ...editingOrder, status: e.target.value })}
+                    className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500"
+                    aria-label="Order status"
+                  >
+                    <option value="Pending">Pending</option>
+                    <option value="Prepared">Prepared</option>
+                  </select>
+                </div>
+              )}
               {editingOrder.items.map((item, index) => (
                 <div key={index} className="flex items-center space-x-2 flex-wrap gap-2">
                   <select
