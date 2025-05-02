@@ -348,20 +348,60 @@ function OperatorDashboard() {
   };
 
   const exportRevenueCSV = () => {
+    // Define today's date boundaries (May 02, 2025, 12:00 AM to 11:59 PM)
+    const todayStart = new Date('2025-05-02T00:00:00');
+    const todayEnd = new Date('2025-05-02T23:59:59');
+
+    // Filter orders for today with status 'Completed'
+    const todayOrders = orders.filter(order => {
+      const orderDate = new Date(order.createdAt);
+      return (
+        order.status === 'Completed' &&
+        orderDate >= todayStart &&
+        orderDate <= todayEnd
+      );
+    });
+
+    // Format items for each order
+    const formatItems = (items) => {
+      return items
+        .map(item => `${item.quantity} x ${item.itemId ? item.itemId.name : '[Deleted]'}`)
+        .join(', ');
+    };
+
+    // Format date and time as MM/DD/YYYY HH:mm:ss
+    const formatDateTime = (date) => {
+      const d = new Date(date);
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const day = String(d.getDate()).padStart(2, '0');
+      const year = d.getFullYear();
+      const hours = String(d.getHours()).padStart(2, '0');
+      const minutes = String(d.getMinutes()).padStart(2, '0');
+      const seconds = String(d.getSeconds()).padStart(2, '0');
+      return `${month}/${day}/${year} ${hours}:${minutes}:${seconds}`;
+    };
+
+    // Create CSV content
     const csvContent = [
-      ['Period', 'Revenue (₹)'],
-      ['Today', revenueData.today.toFixed(2)],
-      ['This Week', revenueData.week.toFixed(2)],
-      ['This Month', revenueData.month.toFixed(2)],
-      ['This Year', revenueData.year.toFixed(2)]
+      ['Order Number', 'Date and Time', 'Items', 'Total (₹)'], // Headers
+      ...todayOrders.map(order => [
+        order.orderNumber,
+        formatDateTime(order.createdAt),
+        formatItems(order.items),
+        order.items
+          .reduce((sum, item) => sum + (item.itemId ? item.quantity * item.itemId.price : 0), 0)
+          .toFixed(2)
+      ])
     ]
-      .map(row => row.join(','))
+      .map(row => row.map(cell => `"${cell}"`).join(',')) // Wrap each cell in quotes to handle commas in items
       .join('\n');
+
+    // Generate and download the CSV file
     const blob = new Blob([csvContent], { type: 'text/csv' });
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
-    a.download = `GSahebCafe_Revenue_${new Date().toISOString().split('T')[0]}.csv`;
+    a.download = `GSahebCafe_DetailedSales_2025-05-02.csv`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
