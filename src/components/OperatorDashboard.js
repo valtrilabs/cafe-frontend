@@ -877,21 +877,21 @@ function OperatorDashboard() {
 
           {showPaymentModal && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div ref={paymentModalRef} className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-md flex flex-col max-h-[80vh] min-h-0">
-                <div className="sticky top-0 bg-white z-10 p-2 border-b">
-                  <h2 className="text-xl sm:text-2xl font-bold flex items-center text-gray-800">
-                    <FaCheck className="mr-3 text-amber-600 text-2xl sm:text-3xl" /> Mark Order as Paid
+              <div ref={paymentModalRef} className="bg-white rounded-lg p-4 w-full max-w-md h-[300px] flex flex-col">
+                <div className="p-2 border-b">
+                  <h2 className="text-xl font-bold flex items-center text-gray-800">
+                    <FaCheck className="mr-3 text-amber-600 text-2xl" /> Mark Order as Paid
                   </h2>
                 </div>
-                <div className="flex-1 overflow-y-auto p-2">
-                  <div className="space-y-4 sm:space-y-6">
+                <div className="p-2 flex-1 overflow-y-auto">
+                  <div className="space-y-4">
                     <div>
-                      <label className="block text-gray-700 text-base sm:text-lg font-medium" htmlFor="payment-method">Payment Method</label>
+                      <label className="block text-gray-700 text-base font-medium" htmlFor="payment-method">Payment Method</label>
                       <select
                         id="payment-method"
                         value={selectedPaymentMethod}
                         onChange={e => setSelectedPaymentMethod(e.target.value)}
-                        className="w-full border rounded-lg px-3 py-2 sm:px-4 sm:py-3 text-base sm:text-lg focus:ring-2 focus:ring-amber-500 bg-white shadow-sm"
+                        className="w-full border rounded-lg px-3 py-2 text-base focus:ring-2 focus:ring-amber-500 bg-white shadow-sm"
                         required
                         aria-label="Select payment method"
                       >
@@ -904,10 +904,10 @@ function OperatorDashboard() {
                     </div>
                   </div>
                 </div>
-                <div className="sticky bottom-0 bg-white z-10 p-2 border-t">
+                <div className="p-2 border-t">
                   <div className="flex flex-col sm:flex-row justify-end gap-4">
                     <button
-                      className="px-4 py-2 sm:px-6 sm:py-3 rounded-lg text-white text-base sm:text-lg font-medium flex items-center justify-center hover:bg-gray-700 transition-colors shadow-sm"
+                      className="px-4 py-2 rounded-lg text-white text-base font-medium flex items-center justify-center hover:bg-gray-700 transition-colors shadow-sm"
                       style={{ backgroundColor: '#4b5563' }}
                       onClick={() => {
                         setShowPaymentModal(null);
@@ -915,15 +915,15 @@ function OperatorDashboard() {
                       }}
                       aria-label="Cancel"
                     >
-                      <FaTimes className="mr-2 text-lg sm:text-xl" /> Cancel
+                      <FaTimes className="mr-2 text-lg" /> Cancel
                     </button>
                     <button
-                      className="px-4 py-2 sm:px-6 sm:py-3 rounded-lg text-white text-base sm:text-lg font-medium flex items-center justify-center hover:bg-amber-600 transition-colors shadow-sm"
+                      className="px-4 py-2 rounded-lg text-white text-base font-medium flex items-center justify-center hover:bg-amber-600 transition-colors shadow-sm"
                       style={{ backgroundColor: '#b45309' }}
                       onClick={() => handleMarkAsPaid(showPaymentModal)}
                       aria-label="Confirm payment"
                     >
-                      <FaCheck className="mr-2 text-lg sm:text-xl" /> Confirm
+                      <FaCheck className="mr-2 text-lg" /> Confirm
                     </button>
                   </div>
                 </div>
@@ -933,13 +933,13 @@ function OperatorDashboard() {
 
           {editingOrder && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div ref={modalRef} className="bg-white rounded-lg p-4 w-full max-w-md flex flex-col max-h-[80vh] min-h-0">
-                <div className="sticky top-0 bg-white z-10 p-2 border-b">
+              <div ref={modalRef} className="bg-white rounded-lg p-4 w-full max-w-md h-[500px] flex flex-col">
+                <div className="p-2 border-b">
                   <h2 className="text-base font-bold flex items-center text-gray-800">
                     <FaEdit className="mr-2 text-amber-600 text-lg" /> Edit Order - Table {editingOrder.tableNumber}
                   </h2>
                 </div>
-                <div className="flex-1 p-2">
+                <div className="p-2 flex-1">
                   <div className="space-y-2">
                     <div>
                       <label className="block text-gray-700 text-sm font-medium" htmlFor="table-number">Table Number</label>
@@ -990,7 +990,7 @@ function OperatorDashboard() {
                     )}
                     <div>
                       <label className="block text-gray-700 text-sm font-medium mb-1">Items</label>
-                      <div className="max-h-[50vh] overflow-y-auto pr-2">
+                      <div className="h-[300px] overflow-y-auto border rounded p-2">
                         {editingOrder.items.map((item, index) => (
                           <div key={index} className="flex items-center gap-2 mb-2">
                             <select
@@ -1056,7 +1056,7 @@ function OperatorDashboard() {
                     </div>
                   </div>
                 </div>
-                <div className="sticky bottom-0 bg-white z-10 p-2 border-t">
+                <div className="p-2 border-t">
                   <div className="flex justify-end gap-2">
                     <button
                       className="px-6 py-2 rounded text-white text-sm font-medium flex items-center hover:bg-gray-600"
