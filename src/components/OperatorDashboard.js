@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
-import { FaPlus, FaEdit, FaTrash, FaCheck, FaTimes, FaUtensils, FaList, FaClock, FaHamburger, FaPrint, FaRupeeSign } from 'react-icons/fa';
+import { FaPlus, FaEdit, FaTrash, FaCheck, FaTimes, FaUtensils, FaList, FaClock, FaHamburger, FaPrint, FaRupeeSign, FaFileExport } from 'react-icons/fa';
 
 function OperatorDashboard() {
   const [orders, setOrders] = useState([]);
   const [error, setError] = useState(null);
-  const [activeTab, setActiveTab] = useState('Pending');
+  const [activeTab, setActiveTab] = useState('New Orders');
   const [editingOrder, setEditingOrder] = useState(null);
   const [menuItems, setMenuItems] = useState([]);
   const [newOrderIds, setNewOrderIds] = useState(new Set());
@@ -14,17 +14,23 @@ function OperatorDashboard() {
     category: '',
     price: '',
     description: '',
-    isAvailable: true,
-    image: null,
+    isAvailable: true
+  });
+  const [revenueData, setRevenueData] = useState({
+    today: 0,
+    week: 0,
+    month: 0,
+    year: 0
   });
 
   const fetchOrders = async (tab) => {
     try {
-      const now = new Date();
-      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0);
-      const url = tab === 'Past Orders'
-        ? `https://cafe-backend-ay2n.onrender.com/api/orders?dateTo=${todayStart.toISOString()}`
-        : `https://cafe-backend-ay2n.onrender.com/api/orders?status=${tab.toLowerCase()}`;
+      const statusMap = {
+        'New Orders': 'pending',
+        'Ready Orders': 'prepared',
+        'Paid Bills': 'completed'
+      };
+      const url = `https://cafe-backend-ay2n.onrender.com/api/orders?status=${statusMap[tab]}`;
       const res = await axios.get(url);
       console.log('Orders fetched:', res.data);
       const newOrders = res.data.filter(order => order.tableNumber != null);
@@ -49,27 +55,50 @@ function OperatorDashboard() {
       setError(null);
     } catch (err) {
       console.error('Error fetching orders:', err);
-      setError('Failed to load orders. Please try again.');
+      setError('Cannot load orders. Please try again.');
     }
   };
 
   const fetchMenuItems = async () => {
     try {
       const res = await axios.get('https://cafe-backend-ay2n.onrender.com/api/menu/operator');
-      console.log('Menu items fetched for operator:', res.data);
+      console.log('Menu items fetched:', res.data);
       setMenuItems(res.data);
       setError(null);
     } catch (err) {
-      console.error('Error fetching menu for operator:', err);
-      setError('Failed to load menu items.');
+      console.error('Error fetching menu:', err);
+      setError('Cannot load menu items.');
+    }
+  };
+
+  const fetchRevenue = async () => {
+    try {
+      const res = await axios.get('https://cafe-backend-ay2n.onrender.com/api/orders/analytics');
+      console.log('Analytics fetched:', res.data);
+      const { revenue } = res.data;
+      const yearStart = new Date(new Date().getFullYear(), 0, 1);
+      const yearRevenue = orders
+        .filter(o => new Date(o.createdAt) >= yearStart && o.status === 'Completed')
+        .reduce((sum, order) => sum + order.items.reduce((s, item) => s + (item.quantity * (item.itemId ? item.itemId.price : 0)), 0), 0);
+      setRevenueData({
+        today: revenue.today || 0,
+        week: revenue.week || 0,
+        month: revenue.month || 0,
+        year: yearRevenue
+      });
+    } catch (err) {
+      console.error('Error fetching revenue:', err);
+      setError('Cannot load sales data.');
     }
   };
 
   useEffect(() => {
-    fetchOrders('Pending');
+    fetchOrders(activeTab);
     fetchMenuItems();
+    fetchRevenue();
     const interval = setInterval(() => {
-      fetchOrders(activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
+      fetchOrders(activeTab);
+      fetchRevenue();
     }, 30000);
     return () => clearInterval(interval);
   }, [activeTab]);
@@ -77,11 +106,11 @@ function OperatorDashboard() {
   const handleStatusUpdate = async (orderId, status) => {
     try {
       await axios.put(`https://cafe-backend-ay2n.onrender.com/api/orders/${orderId}`, { status });
-      await fetchOrders(activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
+      await fetchOrders(activeTab);
       setError(null);
     } catch (err) {
       console.error('Error updating order:', err);
-      setError('Failed to update order.');
+      setError('Cannot update order.');
     }
   };
 
@@ -96,7 +125,8 @@ function OperatorDashboard() {
       }));
     setEditingOrder({
       ...order,
-      items: validItems
+      items: validItems,
+      paymentMethod: order.paymentMethod || ''
     });
   };
 
@@ -108,14 +138,15 @@ function OperatorDashboard() {
           itemId: item.itemId,
           quantity: item.quantity
         })),
-        status: editingOrder.status
+        status: editingOrder.status,
+        paymentMethod: editingOrder.paymentMethod
       });
-      await fetchOrders(activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
+      await fetchOrders(activeTab);
       setEditingOrder(null);
       setError(null);
     } catch (err) {
       console.error('Error saving order:', err);
-      setError('Failed to save order.');
+      setError('Cannot save order.');
     }
   };
 
@@ -123,11 +154,11 @@ function OperatorDashboard() {
     if (window.confirm('Are you sure you want to cancel this order?')) {
       try {
         await axios.delete(`https://cafe-backend-ay2n.onrender.com/api/orders/${orderId}`);
-        await fetchOrders(activeTab === 'Past Orders' ? 'Past Orders' : activeTab);
+        await fetchOrders(activeTab);
         setError(null);
       } catch (err) {
         console.error('Error canceling order:', err);
-        setError('Failed to cancel order.');
+        setError('Cannot cancel order.');
       }
     }
   };
@@ -143,15 +174,15 @@ function OperatorDashboard() {
               @page { margin: 0; size: 80mm auto; }
               body { 
                 margin: 0; 
-                font-family: 'Courier New', monospace; 
-                font-size: 12px; 
-                line-height: 1.2; 
+                font-family: Arial, sans-serif; 
+                font-size: 14px; 
+                line-height: 1.4; 
                 width: 80mm; 
                 color: #000; 
                 background: #fff; 
               }
               .container { padding: 5mm; text-align: center; }
-              .header { font-size: 16px; font-weight: bold; margin-bottom: 5px; }
+              .header { font-size: 18px; font-weight: bold; margin-bottom: 5px; }
               .divider { border-top: 1px dashed #000; margin: 5px 0; }
               .table-row { display: flex; justify-content: space-between; }
               .table-row.header { font-weight: bold; border-bottom: 1px solid #000; margin-bottom: 5px; }
@@ -159,7 +190,7 @@ function OperatorDashboard() {
               .item-qty { text-align: center; width: 15%; }
               .item-total { text-align: right; width: 35%; }
               .total { font-weight: bold; margin-top: 5px; }
-              .footer { margin-top: 10px; font-size: 10px; }
+              .footer { margin-top: 10px; font-size: 12px; }
             }
           </style>
         </head>
@@ -168,6 +199,7 @@ function OperatorDashboard() {
             <div class="header">GSaheb Cafe</div>
             <div>Table ${order.tableNumber} | Order #${order.orderNumber}</div>
             <div>Date: ${new Date(order.createdAt).toLocaleString()}</div>
+            <div>Paid By: ${order.paymentMethod || 'Unknown'}</div>
             <div class="divider"></div>
             <div class="table-row header">
               <span class="item-name">Item</span>
@@ -207,17 +239,12 @@ function OperatorDashboard() {
   const handleAddMenuItem = async (e) => {
     e.preventDefault();
     try {
-      const formData = new FormData();
-      formData.append('name', newItem.name);
-      formData.append('category', newItem.category);
-      formData.append('price', newItem.price);
-      formData.append('description', newItem.description);
-      formData.append('isAvailable', newItem.isAvailable);
-      if (newItem.image) {
-        formData.append('image', newItem.image);
-      }
-      await axios.post('https://cafe-backend-ay2n.onrender.com/api/menu', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' },
+      await axios.post('https://cafe-backend-ay2n.onrender.com/api/menu', {
+        name: newItem.name,
+        category: newItem.category,
+        price: parseFloat(newItem.price),
+        description: newItem.description,
+        isAvailable: newItem.isAvailable
       });
       await fetchMenuItems();
       setNewItem({
@@ -225,25 +252,24 @@ function OperatorDashboard() {
         category: '',
         price: '',
         description: '',
-        isAvailable: true,
-        image: null,
+        isAvailable: true
       });
       setError(null);
     } catch (err) {
       console.error('Error adding menu item:', err);
-      setError('Failed to add menu item. Ensure image is JPEG/PNG and under 5MB.');
+      setError('Cannot add item. Check all fields.');
     }
   };
 
   const handleDeleteMenuItem = async (itemId) => {
-    if (window.confirm('Are you sure you want to delete this menu item?')) {
+    if (window.confirm('Are you sure you want to delete this item?')) {
       try {
         await axios.delete(`https://cafe-backend-ay2n.onrender.com/api/menu/${itemId}`);
         await fetchMenuItems();
         setError(null);
       } catch (err) {
         console.error('Error deleting menu item:', err);
-        setError('Failed to delete menu item.');
+        setError('Cannot delete item.');
       }
     }
   };
@@ -255,432 +281,488 @@ function OperatorDashboard() {
       setError(null);
     } catch (err) {
       console.error('Error updating availability:', err);
-      setError('Failed to update availability.');
+      setError('Cannot update availability.');
     }
   };
 
-  const filteredOrders = activeTab === 'Past Orders' ? orders : orders.filter(order => order.status === activeTab);
+  const exportRevenueCSV = () => {
+    const csvContent = [
+      ['Period', 'Revenue (₹)'],
+      ['Today', revenueData.today.toFixed(2)],
+      ['This Week', revenueData.week.toFixed(2)],
+      ['This Month', revenueData.month.toFixed(2)],
+      ['This Year', revenueData.year.toFixed(2)]
+    ]
+      .map(row => row.join(','))
+      .join('\n');
+    const blob = new Blob([csvContent], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `GSahebCafe_Revenue_${new Date().toISOString().split('T')[0]}.csv`;
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const filteredOrders = orders.filter(order => {
+    const tabStatus = {
+      'New Orders': 'Pending',
+      'Ready Orders': 'Prepared',
+      'Paid Bills': 'Completed'
+    }[activeTab];
+    return order.status === tabStatus;
+  });
 
   return (
-    <div className="min-h-screen bg-gray-100 p-4 sm:p-6">
-      <h1 className="text-2xl sm:text-3xl font-bold text-center mb-6 flex items-center justify-center text-gray-800">
-        <FaUtensils className="mr-2 text-amber-600" /> Operator Dashboard - GSaheb Cafe
-      </h1>
-      
-      {error && (
-        <p className="text-center text-red-600 mb-4 bg-red-100 p-3 rounded-lg">{error}</p>
-      )}
+    <div className="min-h-screen bg-gray-100 p-6">
+      <div className="max-w-7xl mx-auto">
+        <h1 className="text-3xl font-bold text-center mb-6 flex items-center justify-center text-gray-800">
+          <FaUtensils className="mr-3 text-amber-600 text-4xl" /> GSaheb Cafe - Operator Dashboard
+        </h1>
 
-      {/* Tabs */}
-      <div className="flex flex-wrap justify-center gap-2 sm:gap-4 mb-6 bg-white rounded-lg shadow-md p-4">
-        {[
-          { name: 'Pending', icon: <FaClock /> },
-          { name: 'Prepared', icon: <FaCheck /> },
-          { name: 'Completed', icon: <FaCheck /> },
-          { name: 'Past Orders', icon: <FaList /> },
-          { name: 'Menu Management', icon: <FaHamburger /> }
-        ].map(tab => (
+        {error && (
+          <p className="text-center text-red-600 mb-6 bg-red-100 p-4 rounded-lg text-lg">{error}</p>
+        )}
+
+        {/* Export Revenue Button */}
+        <div className="mb-6 flex justify-center">
           <button
-            key={tab.name}
-            className="flex items-center px-4 py-2 rounded-lg text-sm sm:text-base font-medium transition-colors hover:bg-amber-100"
-            style={{
-              backgroundColor: activeTab === tab.name ? '#b45309' : '#ffffff',
-              color: activeTab === tab.name ? '#ffffff' : '#1f2937',
-              boxShadow: activeTab === tab.name ? '0 4px 6px rgba(0, 0, 0, 0.1)' : 'none'
-            }}
-            onClick={() => setActiveTab(tab.name)}
-            aria-label={`Switch to ${tab.name} tab`}
+            className="px-6 py-3 rounded-lg text-white text-lg font-medium flex items-center hover:bg-amber-600 transition-colors"
+            style={{ backgroundColor: '#b45309' }}
+            onClick={exportRevenueCSV}
+            aria-label="Download sales report"
           >
-            {tab.icon}
-            <span className="ml-2">{tab.name}</span>
+            <FaFileExport className="mr-2 text-xl" /> Download Sales Report
           </button>
-        ))}
-      </div>
+        </div>
 
-      {/* Menu Management */}
-      {activeTab === 'Menu Management' && (
-        <div className="bg-white rounded-lg shadow-md p-4 sm:p-6">
-          <h2 className="text-xl sm:text-2xl font-semibold mb-4 flex items-center text-gray-800">
-            <FaHamburger className="mr-2 text-amber-600" /> Manage Menu
-          </h2>
-          
-          {/* Add New Item Form */}
-          <div className="mb-6 bg-gray-50 p-4 rounded-lg">
-            <h3 className="text-lg font-medium mb-3 flex items-center text-gray-700">
-              <FaPlus className="mr-2" /> Add New Item
-            </h3>
-            <form onSubmit={handleAddMenuItem} className="space-y-4">
-              <div>
-                <label className="block text-gray-700 text-sm font-medium" htmlFor="item-name">Name</label>
-                <input
-                  id="item-name"
-                  type="text"
-                  value={newItem.name}
-                  onChange={e => setNewItem({ ...newItem, name: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500"
-                  required
-                  aria-describedby="item-name-error"
-                />
-              </div>
-              <div>
-                <label className="block text-gray-700 text-sm font-medium" htmlFor="item-category">Category</label>
-                <select
-                  id="item-category"
-                  value={newItem.category}
-                  onChange={e => setNewItem({ ...newItem, category: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500"
-                  required
-                  aria-describedby="item-category-error"
-                >
-                  <option value="">Select Category</option>
-                  {['Main Course', 'Drinks', 'Street Food', 'Salads', 'Desserts'].map(cat => (
-                    <option key={cat} value={cat}>{cat}</option>
-                  ))}
-                </select>
-              </div>
-              <div>
-                <label className="block text-gray-700 text-sm font-medium" htmlFor="item-price">Price (₹)</label>
-                <input
-                  id="item-price"
-                  type="number"
-                  step="0.01"
-                  value={newItem.price}
-                  onChange={e => setNewItem({ ...newItem, price: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500"
-                  required
-                  aria-describedby="item-price-error"
-                />
-              </div>
-              <div>
-                <label className="block text-gray-700 text-sm font-medium" htmlFor="item-description">Description</label>
-                <textarea
-                  id="item-description"
-                  value={newItem.description}
-                  onChange={e => setNewItem({ ...newItem, description: e.target.value })}
-                  className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500"
-                  rows="4"
-                  aria-describedby="item-description-error"
-                />
-              </div>
-              <div>
-                <label className="block text-gray-700 text-sm font-medium" htmlFor="item-image">Image (JPEG/PNG, max 5MB)</label>
-                <input
-                  id="item-image"
-                  type="file"
-                  accept="image/jpeg,image/png"
-                  onChange={e => setNewItem({ ...newItem, image: e.target.files[0] })}
-                  className="w-full border rounded-lg px-3 py-2"
-                  aria-describedby="item-image-error"
-                />
-              </div>
-              <div>
-                <label className="flex items-center">
+        {/* Tabs */}
+        <div className="flex flex-wrap justify-center gap-4 mb-8 bg-white rounded-lg shadow-md p-6">
+          {[
+            { name: 'New Orders', icon: <FaClock className="text-2xl" /> },
+            { name: 'Ready Orders', icon: <FaCheck className="text-2xl" /> },
+            { name: 'Paid Bills', icon: <FaRupeeSign className="text-2xl" /> },
+            { name: 'Menu', icon: <FaHamburger className="text-2xl" /> }
+          ].map(tab => (
+            <button
+              key={tab.name}
+              className="flex items-center px-6 py-3 rounded-lg text-lg font-medium transition-colors hover:bg-amber-100"
+              style={{
+                backgroundColor: activeTab === tab.name ? '#b45309' : '#ffffff',
+                color: activeTab === tab.name ? '#ffffff' : '#1f2937',
+                boxShadow: activeTab === tab.name ? '0 4px 6px rgba(0, 0, 0, 0.2)' : 'none'
+              }}
+              onClick={() => setActiveTab(tab.name)}
+              aria-label={`Switch to ${tab.name}`}
+            >
+              {tab.icon}
+              <span className="ml-3">{tab.name}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Menu Management */}
+        {activeTab === 'Menu' && (
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h2 className="text-2xl font-semibold mb-6 flex items-center text-gray-800">
+              <FaHamburger className="mr-3 text-amber-600 text-3xl" /> Manage Menu
+            </h2>
+
+            {/* Add New Item Form */}
+            <div className="mb-8 bg-gray-50 p-6 rounded-lg">
+              <h3 className="text-xl font-medium mb-4 flex items-center text-gray-700">
+                <FaPlus className="mr-3 text-2xl" /> Add New Item
+              </h3>
+              <form onSubmit={handleAddMenuItem} className="space-y-6">
+                <div>
+                  <label className="block text-gray-700 text-lg font-medium" htmlFor="item-name">Item Name</label>
                   <input
-                    type="checkbox"
-                    checked={newItem.isAvailable}
-                    onChange={e => setNewItem({ ...newItem, isAvailable: e.target.checked })}
-                    className="mr-2"
-                    aria-label="Item availability"
+                    id="item-name"
+                    type="text"
+                    value={newItem.name}
+                    onChange={e => setNewItem({ ...newItem, name: e.target.value })}
+                    className="w-full border rounded-lg px-4 py-3 text-lg focus:ring-2 focus:ring-amber-500"
+                    required
+                    aria-label="Item name"
                   />
-                  <span className="text-gray-700 text-sm">Available</span>
-                </label>
-              </div>
-              <button
-                type="submit"
-                className="w-full sm:w-auto px-4 py-2 rounded-lg text-white flex items-center justify-center hover:bg-amber-600 transition-colors"
-                style={{ backgroundColor: '#b45309' }}
-                aria-label="Add new menu item"
-              >
-                <FaPlus className="mr-2" /> Add Item
-              </button>
-            </form>
-          </div>
-
-          {/* Menu Items List */}
-          <h3 className="text-lg font-medium mb-3 flex items-center text-gray-700">
-            <FaList className="mr-2" /> Menu Items
-          </h3>
-          <div className="space-y-4">
-            {menuItems.length === 0 ? (
-              <p className="text-gray-600">No menu items available.</p>
-            ) : (
-              menuItems.map(item => (
-                <div
-                  key={item._id}
-                  className="flex flex-col sm:flex-row items-start sm:items-center justify-between p-4 rounded-lg hover:bg-amber-50 transition-colors"
-                  style={{ backgroundColor: '#fef3c7' }}
+                </div>
+                <div>
+                  <label className="block text-gray-700 text-lg font-medium" htmlFor="item-category">Category</label>
+                  <select
+                    id="item-category"
+                    value={newItem.category}
+                    onChange={e => setNewItem({ ...newItem, category: e.target.value })}
+                    className="w-full border rounded-lg px-4 py-3 text-lg focus:ring-2 focus:ring-amber-500"
+                    required
+                    aria-label="Item category"
+                  >
+                    <option value="">Select Category</option>
+                    {['Main Course', 'Drinks', 'Street Food', 'Salads', 'Desserts'].map(cat => (
+                      <option key={cat} value={cat}>{cat}</option>
+                    ))}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-gray-700 text-lg font-medium" htmlFor="item-price">Price (₹)</label>
+                  <input
+                    id="item-price"
+                    type="number"
+                    step="0.01"
+                    value={newItem.price}
+                    onChange={e => setNewItem({ ...newItem, price: e.target.value })}
+                    className="w-full border rounded-lg px-4 py-3 text-lg focus:ring-2 focus:ring-amber-500"
+                    required
+                    aria-label="Item price"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-700 text-lg font-medium" htmlFor="item-description">Description (Optional)</label>
+                  <textarea
+                    id="item-description"
+                    value={newItem.description}
+                    onChange={e => setNewItem({ ...newItem, description: e.target.value })}
+                    className="w-full border rounded-lg px-4 py-3 text-lg focus:ring-2 focus:ring-amber-500"
+                    rows="3"
+                    aria-label="Item description"
+                  />
+                </div>
+                <div>
+                  <label className="flex items-center">
+                    <input
+                      type="checkbox"
+                      checked={newItem.isAvailable}
+                      onChange={e => setNewItem({ ...newItem, isAvailable: e.target.checked })}
+                      className="mr-3 h-5 w-5"
+                      aria-label="Item available"
+                    />
+                    <span className="text-gray-700 text-lg">Available for Sale</span>
+                  </label>
+                </div>
+                <button
+                  type="submit"
+                  className="w-full px-6 py-3 rounded-lg text-white text-lg font-medium flex items-center justify-center hover:bg-amber-600 transition-colors"
+                  style={{ backgroundColor: '#b45309' }}
+                  aria-label="Add new item"
                 >
-                  <div className="flex items-center mb-2 sm:mb-0">
-                    {item.image ? (
-                      <img
-                        src={`https://cafe-backend-ay2n.onrender.com${item.image}`}
-                        alt={item.name}
-                        className="w-16 h-16 object-cover rounded-lg mr-4"
-                        onError={e => (e.target.src = 'https://source.unsplash.com/64x64/?food')}
-                      />
-                    ) : (
-                      <div className="w-16 h-16 bg-gray-200 rounded-lg mr-4 flex items-center justify-center">
-                        <FaUtensils className="text-gray-500" />
-                      </div>
+                  <FaPlus className="mr-2 text-xl" /> Add Item
+                </button>
+              </form>
+            </div>
+
+            {/* Menu Items Table */}
+            <h3 className="text-xl font-medium mb-4 flex items-center text-gray-700">
+              <FaList className="mr-3 text-2xl" /> Menu Items
+            </h3>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left">
+                <thead>
+                  <tr className="bg-gray-100">
+                    <th className="p-4 text-lg font-medium">Name</th>
+                    <th className="p-4 text-lg font-medium">Category</th>
+                    <th className="p-4 text-lg font-medium">Price</th>
+                    <th className="p-4 text-lg font-medium">Available</th>
+                    <th className="p-4 text-lg font-medium">Action</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {menuItems.length === 0 ? (
+                    <tr>
+                      <td colSpan="5" className="p-4 text-center text-gray-600 text-lg">No menu items found.</td>
+                    </tr>
+                  ) : (
+                    menuItems.map(item => (
+                      <tr key={item._id} className="border-b hover:bg-amber-50">
+                        <td className="p-4 text-lg">{item.name}</td>
+                        <td className="p-4 text-lg">{item.category}</td>
+                        <td className="p-4 text-lg">₹{item.price.toFixed(2)}</td>
+                        <td className="p-4">
+                          <label className="flex items-center">
+                            <input
+                              type="checkbox"
+                              checked={item.isAvailable}
+                              onChange={() => handleToggleAvailability(item._id, item.isAvailable)}
+                              className="h-5 w-5"
+                              aria-label={`Toggle availability for ${item.name}`}
+                            />
+                            <span className="ml-2 text-lg">{item.isAvailable ? 'Yes' : 'No'}</span>
+                          </label>
+                        </td>
+                        <td className="p-4">
+                          <button
+                            className="px-4 py-2 rounded-lg text-white text-lg hover:bg-red-700 transition-colors"
+                            style={{ backgroundColor: '#dc2626' }}
+                            onClick={() => handleDeleteMenuItem(item._id)}
+                            aria-label={`Delete ${item.name}`}
+                          >
+                            <FaTrash />
+                          </button>
+                        </td>
+                      </tr>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
+        {/* Orders */}
+        {['New Orders', 'Ready Orders', 'Paid Bills'].includes(activeTab) && (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+            {filteredOrders.length === 0 ? (
+              <p className="text-center col-span-full text-gray-600 text-xl">
+                No {activeTab.toLowerCase()} found.
+              </p>
+            ) : (
+              filteredOrders.map(order => (
+                <div
+                  key={order._id}
+                  className={`bg-white rounded-lg shadow-md p-6 ${
+                    newOrderIds.has(order._id) ? 'border-4 border-amber-500 animate-pulse' : ''
+                  }`}
+                >
+                  <h2 className="text-xl font-bold text-gray-800 mb-2">
+                    Table {order.tableNumber} (Order #{order.orderNumber})
+                  </h2>
+                  <p className="text-gray-600 text-lg mb-2 flex items-center">
+                    <FaClock className="mr-2" /> {new Date(order.createdAt).toLocaleDateString()}
+                  </p>
+                  <ul className="mb-4 space-y-1">
+                    {order.items.map((item, index) => (
+                      <li key={index} className="text-gray-600 text-lg">
+                        {item.quantity} x {item.itemId ? item.itemId.name : '[Deleted Item]'} (₹
+                        {(item.quantity * (item.itemId ? item.itemId.price : 0)).toFixed(2)})
+                      </li>
+                    ))}
+                  </ul>
+                  <p className="text-lg font-medium text-gray-800 mb-2">
+                    Total: ₹
+                    {order.items
+                      .reduce((sum, item) => sum + (item.itemId ? item.quantity * item.itemId.price : 0), 0)
+                      .toFixed(2)}
+                  </p>
+                  <p
+                    className={`text-lg font-medium mb-4 ${
+                      order.status === 'Pending'
+                        ? 'text-red-600'
+                        : order.status === 'Prepared'
+                        ? 'text-green-600'
+                        : 'text-blue-600'
+                    }`}
+                  >
+                    Status: {order.status === 'Pending' ? 'New' : order.status === 'Prepared' ? 'Ready' : 'Paid'}
+                  </p>
+                  {order.status === 'Completed' && (
+                    <p className="text-lg font-medium text-gray-800 mb-4">
+                      Paid By: {order.paymentMethod || 'Unknown'}
+                    </p>
+                  )}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <button
+                      className="px-4 py-3 rounded-lg text-white text-lg font-medium flex items-center justify-center hover:bg-blue-700 transition-colors"
+                      style={{ backgroundColor: '#2563eb' }}
+                      onClick={() => handleEditOrder(order)}
+                      aria-label={`Edit order ${order.orderNumber}`}
+                    >
+                      <FaEdit className="mr-2 text-xl" /> View/Edit
+                    </button>
+                    {order.status === 'Pending' && (
+                      <>
+                        <button
+                          className="px-4 py-3 rounded-lg text-white text-lg font-medium flex items-center justify-center hover:bg-green-700 transition-colors"
+                          style={{ backgroundColor: '#16a34a' }}
+                          onClick={() => handleStatusUpdate(order._id, 'Prepared')}
+                          aria-label={`Mark order ${order.orderNumber} as ready`}
+                        >
+                          <FaCheck className="mr-2 text-xl" /> Mark as Ready
+                        </button>
+                        <button
+                          className="px-4 py-3 rounded-lg text-white text-lg font-medium flex items-center justify-center hover:bg-red-700 transition-colors"
+                          style={{ backgroundColor: '#dc2626' }}
+                          onClick={() => handleCancelOrder(order._id)}
+                          aria-label={`Cancel order ${order.orderNumber}`}
+                        >
+                          <FaTimes className="mr-2 text-xl" /> Cancel
+                        </button>
+                      </>
                     )}
-                    <div>
-                      <h4 className="font-semibold text-gray-800">{item.name}</h4>
-                      <p className="text-gray-600 text-sm">
-                        {item.category} | <FaRupeeSign className="inline mr-1" />{item.price.toFixed(2)}
-                      </p>
-                      <p className="text-gray-600 text-sm">{item.description}</p>
-                      <p className={item.isAvailable ? 'text-green-600' : 'text-red-600'}>
-                        {item.isAvailable ? 'Available' : 'Unavailable'}
-                      </p>
-                    </div>
-                  </div>
-                  <div className="flex flex-wrap gap-2">
-                    <button
-                      className="w-full sm:w-auto px-3 py-2 rounded-lg text-white flex items-center justify-center text-sm hover:bg-red-700 transition-colors"
-                      style={{ backgroundColor: item.isAvailable ? '#dc2626' : '#16a34a' }}
-                      onClick={() => handleToggleAvailability(item._id, item.isAvailable)}
-                      aria-label={item.isAvailable ? 'Mark item as unavailable' : 'Mark item as available'}
-                    >
-                      {item.isAvailable ? (
-                        <>
-                          <FaTimes className="mr-2" /> Mark Unavailable
-                        </>
-                      ) : (
-                        <>
-                          <FaCheck className="mr-2" /> Mark Available
-                        </>
-                      )}
-                    </button>
-                    <button
-                      className="w-full sm:w-auto px-3 py-2 rounded-lg text-white flex items-center justify-center text-sm hover:bg-gray-700 transition-colors"
-                      style={{ backgroundColor: '#4b5563' }}
-                      onClick={() => handleDeleteMenuItem(item._id)}
-                      aria-label={`Delete ${item.name}`}
-                    >
-                      <FaTrash className="mr-2" /> Delete
-                    </button>
+                    {order.status === 'Prepared' && (
+                      <>
+                        <button
+                          className="px-4 py-3 rounded-lg text-white text-lg font-medium flex items-center justify-center hover:bg-blue-600 transition-colors"
+                          style={{ backgroundColor: '#1e40af' }}
+                          onClick={() => handlePrintBill(order)}
+                          aria-label={`Print receipt for order ${order.orderNumber}`}
+                        >
+                          <FaPrint className="mr-2 text-xl" /> Print Receipt
+                        </button>
+                        <button
+                          className="px-4 py-3 rounded-lg text-white text-lg font-medium flex items-center justify-center hover:bg-green-700 transition-colors"
+                          style={{ backgroundColor: '#16a34a' }}
+                          onClick={() => handleStatusUpdate(order._id, 'Completed')}
+                          aria-label={`Mark order ${order.orderNumber} as paid`}
+                        >
+                          <FaCheck className="mr-2 text-xl" /> Mark as Paid
+                        </button>
+                      </>
+                    )}
+                    {order.status === 'Completed' && (
+                      <button
+                        className="px-4 py-3 rounded-lg text-white text-lg font-medium flex items-center justify-center hover:bg-blue-600 transition-colors"
+                        style={{ backgroundColor: '#1e40af' }}
+                        onClick={() => handlePrintBill(order)}
+                        aria-label={`Print receipt for order ${order.orderNumber}`}
+                      >
+                        <FaPrint className="mr-2 text-xl" /> Print Receipt
+                      </button>
+                    )}
                   </div>
                 </div>
               ))
             )}
           </div>
-        </div>
-      )}
+        )}
 
-      {/* Orders */}
-      {['Pending', 'Prepared', 'Completed', 'Past Orders'].includes(activeTab) && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-          {filteredOrders.length === 0 ? (
-            <p className="text-center col-span-full text-gray-600">
-              No {activeTab.toLowerCase()} orders.
-            </p>
-          ) : (
-            filteredOrders.map(order => (
-              <div
-                key={order._id}
-                className={`bg-white rounded-lg shadow-md p-4 hover:shadow-lg transition-shadow ${
-                  newOrderIds.has(order._id) ? 'border-2 border-amber-500 animate-pulse' : ''
-                }`}
-              >
-                <h2 className="text-lg sm:text-xl font-semibold flex items-center text-gray-800">
-                  <FaUtensils className="mr-2 text-amber-600" /> Table {order.tableNumber} (Order #{order.orderNumber})
-                </h2>
-                <p className="text-gray-600 text-sm flex items-center">
-                  <FaClock className="mr-2" /> Placed: {new Date(order.createdAt).toLocaleString()}
-                </p>
-                <ul className="mt-2 space-y-1">
-                  {order.items.map((item, index) => (
-                    <li key={index} className="text-gray-600 text-sm">
-                      {item.quantity} x {item.itemId ? item.itemId.name : '[Deleted Item]'} (<FaRupeeSign className="inline mr-1" />
-                      {(item.quantity * (item.itemId ? item.itemId.price : 0)).toFixed(2)})
-                    </li>
-                  ))}
-                </ul>
-                <p
-                  className={`mt-2 text-sm font-medium ${
-                    order.status === 'Pending'
-                      ? 'text-red-600'
-                      : order.status === 'Prepared'
-                      ? 'text-green-600'
-                      : 'text-blue-600'
-                  }`}
-                >
-                  Status: {order.status}
-                </p>
-                <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  <button
-                    className="w-full px-3 py-2 rounded-lg text-white flex items-center justify-center text-sm hover:bg-blue-700 transition-colors"
-                    style={{ backgroundColor: '#2563eb' }}
-                    onClick={() => handleEditOrder(order)}
-                    aria-label={`Edit order ${order.orderNumber}`}
-                  >
-                    <FaEdit className="mr-2" /> View/Edit
-                  </button>
-                  {order.status === 'Pending' && (
-                    <>
-                      <button
-                        className="w-full px-3 py-2 rounded-lg text-white flex items-center justify-center text-sm hover:bg-green-700 transition-colors"
-                        style={{ backgroundColor: '#16a34a' }}
-                        onClick={() => handleStatusUpdate(order._id, 'Prepared')}
-                        aria-label={`Mark order ${order.orderNumber} as prepared`}
-                      >
-                        <FaCheck className="mr-2" /> Mark as Prepared
-                      </button>
-                      <button
-                        className="w-full px-3 py-2 rounded-lg text-white flex items-center justify-center text-sm hover:bg-red-700 transition-colors"
-                        style={{ backgroundColor: '#dc2626' }}
-                        onClick={() => handleCancelOrder(order._id)}
-                        aria-label={`Cancel order ${order.orderNumber}`}
-                      >
-                        <FaTimes className="mr-2" /> Cancel
-                      </button>
-                    </>
-                  )}
-                  {order.status === 'Prepared' && (
-                    <>
-                      <button
-                        className="w-full px-3 py-2 rounded-lg text-white flex items-center justify-center text-sm hover:bg-blue-600 transition-colors"
-                        style={{ backgroundColor: '#1e40af' }}
-                        onClick={() => handlePrintBill(order)}
-                        aria-label={`Print receipt for order ${order.orderNumber}`}
-                      >
-                        <FaPrint className="mr-2" /> Print Receipt
-                      </button>
-                      <button
-                        className="w-full px-3 py-2 rounded-lg text-white flex items-center justify-center text-sm hover:bg-green-700 transition-colors"
-                        style={{ backgroundColor: '#16a34a' }}
-                        onClick={() => handleStatusUpdate(order._id, 'Completed')}
-                        aria-label={`Mark order ${order.orderNumber} as completed`}
-                      >
-                        <FaCheck className="mr-2" /> Mark as Completed
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
-
-      {/* Edit Order Modal */}
-      {editingOrder && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-          <div className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-lg">
-            <h2 className="text-xl sm:text-2xl font-bold mb-4 flex items-center text-gray-800">
-              <FaEdit className="mr-2 text-amber-600" /> Edit Order - Table {editingOrder.tableNumber} (Order #{editingOrder.orderNumber})
-            </h2>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-gray-700 text-sm font-medium" htmlFor="table-number">Table Number</label>
-                <input
-                  id="table-number"
-                  type="number"
-                  min="1"
-                  value={editingOrder.tableNumber}
-                  onChange={e => setEditingOrder({ ...editingOrder, tableNumber: parseInt(e.target.value) || 1 })}
-                  className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500"
-                  aria-label="Table number"
-                />
-              </div>
-              {(editingOrder.status === 'Pending' || editingOrder.status === 'Prepared') && (
+        {/* Edit Order Modal */}
+        {editingOrder && (
+          <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+            <div className="bg-white rounded-lg p-6 w-full max-w-xl">
+              <h2 className="text-2xl font-bold mb-6 flex items-center text-gray-800">
+                <FaEdit className="mr-3 text-amber-600 text-3xl" /> Edit Order - Table {editingOrder.tableNumber}
+              </h2>
+              <div className="space-y-6">
                 <div>
-                  <label className="block text-gray-700 text-sm font-medium" htmlFor="order-status">Status</label>
-                  <select
-                    id="order-status"
-                    value={editingOrder.status}
-                    onChange={e => setEditingOrder({ ...editingOrder, status: e.target.value })}
-                    className="w-full border rounded-lg px-3 py-2 focus:ring-2 focus:ring-amber-500"
-                    aria-label="Order status"
-                  >
-                    <option value="Pending">Pending</option>
-                    <option value="Prepared">Prepared</option>
-                  </select>
-                </div>
-              )}
-              {editingOrder.items.map((item, index) => (
-                <div key={index} className="flex items-center space-x-2 flex-wrap gap-2">
-                  <select
-                    className="flex-1 border rounded-lg px-2 py-1 text-sm focus:ring-2 focus:ring-amber-500"
-                    value={item.itemId}
-                    onChange={e => {
-                      const newItem = menuItems.find(m => m._id === e.target.value);
-                      const newItems = [...editingOrder.items];
-                      newItems[index] = {
-                        ...newItems[index],
-                        itemId: newItem._id,
-                        name: newItem.name,
-                        price: newItem.price
-                      };
-                      setEditingOrder({ ...editingOrder, items: newItems });
-                    }}
-                    aria-label={`Select item ${index + 1}`}
-                  >
-                    {menuItems.map(menuItem => (
-                      <option key={menuItem._id} value={menuItem._id}>
-                        {menuItem.name} (<FaRupeeSign className="inline mr-1" />{menuItem.price.toFixed(2)})
-                      </option>
-                    ))}
-                  </select>
+                  <label className="block text-gray-700 text-lg font-medium" htmlFor="table-number">Table Number</label>
                   <input
+                    id="table-number"
                     type="number"
                     min="1"
-                    className="border rounded-lg px-2 py-1 w-16 text-sm focus:ring-2 focus:ring-amber-500"
-                    value={item.quantity}
-                    onChange={e => {
-                      const newItems = [...editingOrder.items];
-                      newItems[index].quantity = parseInt(e.target.value) || 1;
-                      setEditingOrder({ ...editingOrder, items: newItems });
-                    }}
-                    aria-label={`Quantity for item ${index + 1}`}
+                    value={editingOrder.tableNumber}
+                    onChange={e => setEditingOrder({ ...editingOrder, tableNumber: parseInt(e.target.value) || 1 })}
+                    className="w-full border rounded-lg px-4 py-3 text-lg focus:ring-2 focus:ring-amber-500"
+                    aria-label="Change table number"
                   />
+                </div>
+                {(editingOrder.status === 'Pending' || editingOrder.status === 'Prepared') && (
+                  <div>
+                    <label className="block text-gray-700 text-lg font-medium" htmlFor="order-status">Order Status</label>
+                    <select
+                      id="order-status"
+                      value={editingOrder.status}
+                      onChange={e => setEditingOrder({ ...editingOrder, status: e.target.value })}
+                      className="w-full border rounded-lg px-4 py-3 text-lg focus:ring-2 focus:ring-amber-500"
+                      aria-label="Change order status"
+                    >
+                      <option value="Pending">New</option>
+                      <option value="Prepared">Ready</option>
+                    </select>
+                  </div>
+                )}
+                {editingOrder.status === 'Completed' && (
+                  <div>
+                    <label className="block text-gray-700 text-lg font-medium" htmlFor="payment-method">Paid By</label>
+                    <select
+                      id="payment-method"
+                      value={editingOrder.paymentMethod}
+                      onChange={e => setEditingOrder({ ...editingOrder, paymentMethod: e.target.value })}
+                      className="w-full border rounded-lg px-4 py-3 text-lg focus:ring-2 focus:ring-amber-500"
+                      aria-label="Select payment method"
+                    >
+                      <option value="">Select Payment Method</option>
+                      <option value="Cash">Cash</option>
+                      <option value="Card">Card</option>
+                      <option value="UPI">UPI</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                )}
+                <div>
+                  <label className="block text-gray-700 text-lg font-medium mb-2">Items</label>
+                  {editingOrder.items.map((item, index) => (
+                    <div key={index} className="flex items-center space-x-4 mb-4 flex-wrap gap-4">
+                      <select
+                        className="flex-1 border rounded-lg px-4 py-3 text-lg focus:ring-2 focus:ring-amber-500"
+                        value={item.itemId}
+                        onChange={e => {
+                          const newItem = menuItems.find(m => m._id === e.target.value);
+                          const newItems = [...editingOrder.items];
+                          newItems[index] = {
+                            ...newItems[index],
+                            itemId: newItem._id,
+                            name: newItem.name,
+                            price: newItem.price
+                          };
+                          setEditingOrder({ ...editingOrder, items: newItems });
+                        }}
+                        aria-label={`Select item ${index + 1}`}
+                      >
+                        {menuItems.map(menuItem => (
+                          <option key={menuItem._id} value={menuItem._id}>
+                            {menuItem.name} (₹{menuItem.price.toFixed(2)})
+                          </option>
+                        ))}
+                      </select>
+                      <input
+                        type="number"
+                        min="1"
+                        className="border rounded-lg px-4 py-3 w-20 text-lg focus:ring-2 focus:ring-amber-500"
+                        value={item.quantity}
+                        onChange={e => {
+                          const newItems = [...editingOrder.items];
+                          newItems[index].quantity = parseInt(e.target.value) || 1;
+                          setEditingOrder({ ...editingOrder, items: newItems });
+                        }}
+                        aria-label={`Quantity for item ${index + 1}`}
+                      />
+                      <button
+                        className="text-red-600 hover:text-red-800 text-lg"
+                        onClick={() => {
+                          const newItems = editingOrder.items.filter((_, i) => i !== index);
+                          setEditingOrder({ ...editingOrder, items: newItems });
+                        }}
+                        aria-label={`Remove item ${index + 1}`}
+                      >
+                        <FaTrash />
+                      </button>
+                    </div>
+                  ))}
                   <button
-                    className="text-red-600 hover:text-red-800 text-sm focus:outline-none"
+                    className="text-blue-600 hover:text-blue-800 flex items-center text-lg"
                     onClick={() => {
-                      const newItems = editingOrder.items.filter((_, i) => i !== index);
+                      const newItems = [
+                        ...editingOrder.items,
+                        { itemId: menuItems[0]._id, quantity: 1, name: menuItems[0].name, price: menuItems[0].price }
+                      ];
                       setEditingOrder({ ...editingOrder, items: newItems });
                     }}
-                    aria-label={`Remove item ${index + 1}`}
+                    aria-label="Add new item to order"
                   >
-                    Remove
+                    <FaPlus className="mr-2" /> Add Item
                   </button>
                 </div>
-              ))}
-              <button
-                className="text-blue-600 hover:text-blue-800 flex items-center text-sm"
-                onClick={() => {
-                  const newItems = [
-                    ...editingOrder.items,
-                    { itemId: menuItems[0]._id, quantity: 1, name: menuItems[0].name, price: menuItems[0].price }
-                  ];
-                  setEditingOrder({ ...editingOrder, items: newItems });
-                }}
-                aria-label="Add new item to order"
-              >
-                <FaPlus className="mr-2" /> Add Item
-              </button>
-            </div>
-            <div className="mt-6 flex flex-col sm:flex-row justify-end gap-2">
-              <button
-                className="w-full sm:w-auto px-4 py-2 rounded-lg text-white flex items-center justify-center hover:bg-gray-700 transition-colors"
-                style={{ backgroundColor: '#4b5563' }}
-                onClick={() => setEditingOrder(null)}
-                aria-label="Cancel order edit"
-              >
-                <FaTimes className="mr-2" /> Cancel
-              </button>
-              <button
-                className="w-full sm:w-auto px-4 py-2 rounded-lg text-white flex items-center justify-center hover:bg-amber-600 transition-colors"
-                style={{ backgroundColor: '#b45309' }}
-                onClick={handleSaveEdit}
-                aria-label="Save order changes"
-              >
-                <FaCheck className="mr-2" /> Save
-              </button>
+              </div>
+              <div className="mt-8 flex flex-col sm:flex-row justify-end gap-4">
+                <button
+                  className="px-6 py-3 rounded-lg text-white text-lg font-medium flex items-center justify-center hover:bg-gray-700 transition-colors"
+                  style={{ backgroundColor: '#4b5563' }}
+                  onClick={() => setEditingOrder(null)}
+                  aria-label="Cancel changes"
+                >
+                  <FaTimes className="mr-2 text-xl" /> Cancel
+                </button>
+                <button
+                  className="px-6 py-3 rounded-lg text-white text-lg font-medium flex items-center justify-center hover:bg-amber-600 transition-colors"
+                  style={{ backgroundColor: '#b45309' }}
+                  onClick={handleSaveEdit}
+                  aria-label="Save changes"
+                >
+                  <FaCheck className="mr-2 text-xl" /> Save
+                </button>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        )}
+      </div>
     </div>
   );
 }
