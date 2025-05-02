@@ -28,6 +28,8 @@ function OperatorDashboard() {
   const [startDate, setStartDate] = useState(new Date(new Date().setDate(new Date().getDate() - 1)));
   const [endDate, setEndDate] = useState(new Date());
   const [showItemsPopover, setShowItemsPopover] = useState(null);
+  const [showPaymentModal, setShowPaymentModal] = useState(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
 
   const fetchOrders = async (tab) => {
     try {
@@ -109,15 +111,27 @@ function OperatorDashboard() {
     return () => clearInterval(interval);
   }, [activeTab]);
 
-  const handleStatusUpdate = async (orderId, status) => {
+  const handleStatusUpdate = async (orderId, status, paymentMethod = null) => {
     try {
-      await axios.put(`https://cafe-backend-ay2n.onrender.com/api/orders/${orderId}`, { status });
+      const updateData = { status };
+      if (paymentMethod) updateData.paymentMethod = paymentMethod;
+      await axios.put(`https://cafe-backend-ay2n.onrender.com/api/orders/${orderId}`, updateData);
       await fetchOrders(activeTab);
       setError(null);
     } catch (err) {
       console.error('Error updating order:', err);
-      setError('Cannot update order.');
+      setError('Cannot update order: ' + (err.response?.data?.error || 'Server error'));
     }
+  };
+
+  const handleMarkAsPaid = (orderId) => {
+    if (!selectedPaymentMethod) {
+      setError('Please select a payment method.');
+      return;
+    }
+    handleStatusUpdate(orderId, 'Completed', selectedPaymentMethod);
+    setShowPaymentModal(null);
+    setSelectedPaymentMethod('');
   };
 
   const handleEditOrder = (order) => {
@@ -145,14 +159,14 @@ function OperatorDashboard() {
           quantity: item.quantity
         })),
         status: editingOrder.status,
-        paymentMethod: editingOrder.paymentMethod
+        paymentMethod: editingOrder.paymentMethod || null
       });
       await fetchOrders(activeTab);
       setEditingOrder(null);
       setError(null);
     } catch (err) {
       console.error('Error saving order:', err);
-      setError('Cannot save order.');
+      setError('Cannot save order: ' + (err.response?.data?.error || 'Server error'));
     }
   };
 
@@ -764,7 +778,7 @@ function OperatorDashboard() {
                                 <button
                                   className="px-4 py-2 rounded-lg text-white text-base hover:bg-green-700 transition-colors"
                                   style={{ backgroundColor: '#16a34a' }}
-                                  onClick={() => handleStatusUpdate(order._id, 'Completed')}
+                                  onClick={() => setShowPaymentModal(order._id)}
                                   aria-label={`Mark order ${order.orderNumber} as paid`}
                                 >
                                   <FaCheck />
@@ -791,6 +805,57 @@ function OperatorDashboard() {
             </div>
           )}
 
+          {/* Payment Method Modal */}
+          {showPaymentModal && (
+            <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
+              <div className="bg-white rounded-lg p-6 w-full max-w-md">
+                <h2 className="text-2xl font-bold mb-6 flex items-center text-gray-800">
+                  <FaCheck className="mr-3 text-amber-600 text-3xl" /> Mark Order as Paid
+                </h2>
+                <div className="space-y-6">
+                  <div>
+                    <label className="block text-gray-700 text-lg font-medium" htmlFor="payment-method">Payment Method</label>
+                    <select
+                      id="payment-method"
+                      value={selectedPaymentMethod}
+                      onChange={e => setSelectedPaymentMethod(e.target.value)}
+                      className="w-full border rounded-lg px-4 py-3 text-lg focus:ring-2 focus:ring-amber-500"
+                      required
+                      aria-label="Select payment method"
+                    >
+                      <option value="">Select Payment Method</option>
+                      <option value="Cash">Cash</option>
+                      <option value="UPI">UPI</option>
+                      <option value="Card">Card</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="mt-8 flex flex-col sm:flex-row justify-end gap-4">
+                  <button
+                    className="px-6 py-3 rounded-lg text-white text-lg font-medium flex items-center justify-center hover:bg-gray-700 transition-colors"
+                    style={{ backgroundColor: '#4b5563' }}
+                    onClick={() => {
+                      setShowPaymentModal(null);
+                      setSelectedPaymentMethod('');
+                    }}
+                    aria-label="Cancel"
+                  >
+                    <FaTimes className="mr-2 text-xl" /> Cancel
+                  </button>
+                  <button
+                    className="px-6 py-3 rounded-lg text-white text-lg font-medium flex items-center justify-center hover:bg-amber-600 transition-colors"
+                    style={{ backgroundColor: '#b45309' }}
+                    onClick={() => handleMarkAsPaid(showPaymentModal)}
+                    aria-label="Confirm payment"
+                  >
+                    <FaCheck className="mr-2 text-xl" /> Confirm
+                  </button>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Edit Order Modal */}
           {editingOrder && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
@@ -811,6 +876,25 @@ function OperatorDashboard() {
                       aria-label="Change table number"
                     />
                   </div>
+                  {editingOrder.status !== 'Pending' && (
+                    <div>
+                      <label className="block text-gray-700 text-lg font-medium" htmlFor="payment-method">Paid By</label>
+                      <select
+                        id="payment-method"
+                        value={editingOrder.paymentMethod}
+                        onChange={e => setEditingOrder({ ...editingOrder, paymentMethod: e.target.value })}
+                        className="w-full border rounded-lg px-4 py-3 text-lg focus:ring-2 focus:ring-amber-500"
+                        aria-label="Select payment method"
+                        disabled={editingOrder.status === 'Prepared'}
+                      >
+                        <option value="">Select Payment Method</option>
+                        <option value="Cash">Cash</option>
+                        <option value="UPI">UPI</option>
+                        <option value="Card">Card</option>
+                        <option value="Other">Other</option>
+                      </select>
+                    </div>
+                  )}
                   {(editingOrder.status === 'Pending' || editingOrder.status === 'Prepared') && (
                     <div>
                       <label className="block text-gray-700 text-lg font-medium" htmlFor="order-status">Order Status</label>
@@ -823,24 +907,7 @@ function OperatorDashboard() {
                       >
                         <option value="Pending">New</option>
                         <option value="Prepared">Ready</option>
-                      </select>
-                    </div>
-                  )}
-                  {editingOrder.status === 'Completed' && (
-                    <div>
-                      <label className="block text-gray-700 text-lg font-medium" htmlFor="payment-method">Paid By</label>
-                      <select
-                        id="payment-method"
-                        value={editingOrder.paymentMethod}
-                        onChange={e => setEditingOrder({ ...editingOrder, paymentMethod: e.target.value })}
-                        className="w-full border rounded-lg px-4 py-3 text-lg focus:ring-2 focus:ring-amber-500"
-                        aria-label="Select payment method"
-                      >
-                        <option value="">Select Payment Method</option>
-                        <option value="Cash">Cash</option>
-                        <option value="Card">Card</option>
-                        <option value="UPI">UPI</option>
-                        <option value="Other">Other</option>
+                        <option value="Completed">Paid</option>
                       </select>
                     </div>
                   )}
