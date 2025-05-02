@@ -39,23 +39,6 @@ function Menu() {
     }
   };
 
-  const checkOrderStatus = async (sessionToken) => {
-    try {
-      console.log(`Checking order status with token: ${sessionToken}`);
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/sessions/order-status`, {
-        params: { token: sessionToken }
-      });
-      console.log(`Order status: ${response.data.status}`);
-      return response.data;
-    } catch (err) {
-      console.error('Order status check error:', err.response?.data || err.message);
-      setSessionValid(false);
-      setSessionMessage(err.response?.data?.error || 'Invalid session or order. Please scan QR code again.');
-      navigate('/scan-qr', { state: { message: err.response?.data?.error } });
-      return null;
-    }
-  };
-
   const fetchMenu = async (sessionToken) => {
     try {
       console.log(`Fetching menu with token: ${sessionToken}`);
@@ -85,7 +68,7 @@ function Menu() {
         if (attempt === retries) {
           setSessionValid(false);
           setSessionMessage('Failed to create session after retries. Please scan the QR code.');
-          navigate('/scan-qr', { state: { message: 'Failed to create session. Please scan QR code.' } });
+          navigate('/scan-qr', { state: { message: 'Failed to create session. Please scan the QR code.' } });
           return null;
         }
         await new Promise(resolve => setTimeout(resolve, 1000));
@@ -101,7 +84,7 @@ function Menu() {
         console.error('Invalid table number:', tableNumber);
         setSessionValid(false);
         setSessionMessage('Invalid table number. Please scan the QR code.');
-        navigate('/scan-qr', { state: { message: 'Invalid table number. Please scan QR code.' } });
+        navigate('/scan-qr', { state: { message: 'Invalid table number. Please scan the QR code.' } });
         return;
       }
 
@@ -117,16 +100,6 @@ function Menu() {
 
       const result = await validateSession(sessionToken);
       if (result) {
-        if (orderSummary) {
-          // Check order status on refresh
-          const orderStatus = await checkOrderStatus(sessionToken);
-          if (orderStatus && orderStatus.status !== 'Pending') {
-            setSessionValid(false);
-            setSessionMessage('Order is prepared or completed. Please scan QR code again.');
-            navigate('/scan-qr', { state: { message: 'Order is prepared or completed. Please scan QR code again.' } });
-            return;
-          }
-        }
         fetchMenu(sessionToken);
       }
     };
@@ -134,7 +107,7 @@ function Menu() {
     initializeSession();
 
     const interval = setInterval(async () => {
-      if (token && !orderSummary) {
+      if (token) {
         const result = await validateSession(token);
         if (!result) {
           setSessionValid(false);
@@ -144,14 +117,10 @@ function Menu() {
       }
     }, 10000);
     return () => clearInterval(interval);
-  }, [tableNumber, token, navigate, orderSummary]);
+  }, [tableNumber, token, navigate]);
 
   const startNewOrder = () => {
-    console.log(`Starting new order for table: ${tableNumber}`);
-    setOrderSummary(null);
-    setSessionValid(false);
-    setSessionMessage('Please scan the QR code to start a new order.');
-    navigate('/scan-qr', { state: { message: 'Please scan the QR code to start a new order.' } });
+    navigate('/scan-qr');
   };
 
   const categories = [
@@ -287,7 +256,7 @@ function Menu() {
               Total: <FaRupeeSign className="ml-1 mr-1" />{orderSummary.total.toFixed(2)}
             </p>
           </div>
-          <div className="mt-4 flex flex-col sm:flex-row gap-4">
+          <div className="mt-4">
             <button
               className="w-full sm:w-auto px-4 py-2 rounded-lg text-white flex items-center justify-center"
               style={{ backgroundColor: '#b45309' }}
