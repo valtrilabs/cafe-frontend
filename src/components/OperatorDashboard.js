@@ -122,12 +122,16 @@ function OperatorDashboard() {
         setShowPaymentModal(null);
         setSelectedPaymentMethod('');
       }
+      if (!event.target.closest('.items-button') && !event.target.closest('.items-popover')) {
+        setShowItemsPopover(null);
+      }
     };
     const handleEscape = (event) => {
       if (event.key === 'Escape') {
         setEditingOrder(null);
         setShowPaymentModal(null);
         setSelectedPaymentMethod('');
+        setShowItemsPopover(null);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -399,6 +403,176 @@ function OperatorDashboard() {
       .join(', ');
     const more = items.length > 2 ? `, +${items.length - 2} more` : '';
     return `${summary}${more}`;
+  };
+
+  const renderTableRows = () => {
+    const minRows = 5;
+    const rows = [];
+    
+    // Add actual order rows
+    filteredOrders.forEach(order => {
+      rows.push(
+        <tr
+          key={order._id}
+          className={`border-b hover:bg-amber-50 ${
+            newOrderIds.has(order._id) ? 'bg-amber-100 border-l-4 border-amber-500' : ''
+          }`}
+        >
+          <td className="p-3 sm:p-4 text-sm sm:text-base">Table {order.tableNumber}</td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base">#{order.orderNumber}</td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base hidden md:table-cell">
+            {new Date(order.createdAt).toLocaleDateString()}
+          </td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base relative">
+            <button
+              className="items-button text-blue-600 hover:underline"
+              onMouseEnter={(e) => {
+                setShowItemsPopover(order._id);
+                const rect = e.target.getBoundingClientRect();
+                const popover = document.getElementById(`popover-${order._id}`);
+                if (popover) {
+                  const viewportHeight = window.innerHeight;
+                  const viewportWidth = window.innerWidth;
+                  const popoverHeight = popover.offsetHeight || 200; // Estimate if not rendered
+                  const popoverWidth = popover.offsetWidth || 200;
+                  let top = rect.bottom + window.scrollY + 8;
+                  let left = rect.left + window.scrollX;
+                  // Place above if not enough space below
+                  if (rect.bottom + popoverHeight > viewportHeight) {
+                    top = rect.top + window.scrollY - popoverHeight - 8;
+                  }
+                  // Adjust left to stay within viewport
+                  if (left + popoverWidth > viewportWidth) {
+                    left = viewportWidth - popoverWidth - 8;
+                  }
+                  if (left < 8) left = 8;
+                  popover.style.top = `${top}px`;
+                  popover.style.left = `${left}px`;
+                }
+              }}
+              onClick={() => {
+                setShowItemsPopover(showItemsPopover === order._id ? null : order._id);
+              }}
+              aria-label={`View items for order ${order.orderNumber}`}
+            >
+              {renderItems(order.items)}
+            </button>
+            {showItemsPopover === order._id && (
+              <div
+                id={`popover-${order._id}`}
+                className="items-popover absolute z-30 bg-white border rounded-lg shadow-md p-2 sm:p-4 max-w-[80vw] sm:max-w-xs w-full"
+              >
+                <ul className="list-disc pl-5 space-y-1">
+                  {order.items.map((item, index) => (
+                    <li key={index} className="text-xs sm:text-sm">
+                      {item.quantity} x {item.itemId ? item.itemId.name : '[Deleted]'} (₹
+                      {(item.quantity * (item.itemId ? item.itemId.price : 0)).toFixed(2)})
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
+          </td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base">
+            ₹{order.items
+              .reduce((sum, item) => sum + (item.itemId ? item.quantity * item.itemId.price : 0), 0)
+              .toFixed(2)}
+          </td>
+          <td
+            className={`p-3 sm:p-4 text-sm sm:text-base ${
+              order.status === 'Pending'
+                ? 'text-red-600'
+                : order.status === 'Prepared'
+                ? 'text-green-600'
+                : 'text-blue-600'
+            }`}
+          >
+            {order.status === 'Pending' ? 'New' : order.status === 'Prepared' ? 'Served' : 'Paid'}
+          </td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base">
+            {activeTab === 'Paid Bills' ? paymentMethodBadge(order.paymentMethod || 'Unknown') : 'Not Paid'}
+          </td>
+          <td className="p-3 sm:p-4 flex flex-wrap gap-2">
+            <button
+              className="px-3 py-2 rounded-lg text-white text-sm hover:bg-blue-700 transition-colors"
+              style={{ backgroundColor: '#2563eb' }}
+              onClick={() => handleEditOrder(order)}
+              aria-label={`Edit order ${order.orderNumber}`}
+            >
+              <FaEdit />
+            </button>
+            {order.status === 'Pending' && (
+              <>
+                <button
+                  className="px-3 py-2 rounded-lg text-white text-sm hover:bg-green-700 transition-colors"
+                  style={{ backgroundColor: '#16a34a' }}
+                  onClick={() => handleStatusUpdate(order._id, 'Prepared')}
+                  aria-label={`Mark order ${order.orderNumber} as served`}
+                >
+                  <FaCheck />
+                </button>
+                <button
+                  className="px-3 py-2 rounded-lg text-white text-sm hover:bg-red-700 transition-colors"
+                  style={{ backgroundColor: '#dc2626' }}
+                  onClick={() => handleCancelOrder(order._id)}
+                  aria-label={`Cancel order ${order.orderNumber}`}
+                >
+                  <FaTimes />
+                </button>
+              </>
+            )}
+            {order.status === 'Prepared' && (
+              <>
+                <button
+                  className="px-3 py-2 rounded-lg text-white text-sm hover:bg-blue-600 transition-colors"
+                  style={{ backgroundColor: '#1e40af' }}
+                  onClick={() => handlePrintBill(order)}
+                  aria-label={`Print receipt for order ${order.orderNumber}`}
+                >
+                  <FaPrint />
+                </button>
+                <button
+                  className="px-3 py-2 rounded-lg text-white text-sm hover:bg-green-700 transition-colors"
+                  style={{ backgroundColor: '#16a34a' }}
+                  onClick={() => setShowPaymentModal(order._id)}
+                  aria-label={`Mark order ${order.orderNumber} as paid`}
+                >
+                  <FaCheck />
+                </button>
+              </>
+            )}
+            {order.status === 'Completed' && (
+              <button
+                className="px-3 py-2 rounded-lg text-white text-sm hover:bg-blue-600 transition-colors"
+                style={{ backgroundColor: '#1e40af' }}
+                onClick={() => handlePrintBill(order)}
+                aria-label={`Print receipt for order ${order.orderNumber}`}
+              >
+                <FaPrint />
+              </button>
+            )}
+          </td>
+        </tr>
+      );
+    });
+
+    // Add placeholder rows if fewer than minRows
+    while (rows.length < minRows) {
+      rows.push(
+        <tr key={`placeholder-${rows.length}`} className="border-b bg-gray-50">
+          <td className="p-3 sm:p-4 text-sm sm:text-base">&nbsp;</td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base">&nbsp;</td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base hidden md:table-cell">&nbsp;</td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base">&nbsp;</td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base">&nbsp;</td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base">&nbsp;</td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base">&nbsp;</td>
+          <td className="p-3 sm:p-4 text-sm sm:text-base">&nbsp;</td>
+        </tr>
+      );
+    }
+
+    return rows;
   };
 
   return (
@@ -686,169 +860,27 @@ function OperatorDashboard() {
               )}
 
               <div className="overflow-x-auto">
-                <table className="min-w-full text-left">
-                  <thead>
-                    <tr className="bg-gray-100">
-                      <th className="p-3 sm:p-4 text-base sm:text-lg font-medium w-1/12">Table</th>
-                      <th className="p-3 sm:p-4 text-base sm:text-lg font-medium w-1/12">Order #</th>
-                      <th className="p-3 sm:p-4 text-base sm:text-lg font-medium w-1/12 hidden md:table-cell">Date</th>
-                      <th className="p-3 sm:p-4 text-base sm:text-lg font-medium w-3/12">Items</th>
-                      <th className="p-3 sm:p-4 text-base sm:text-lg font-medium w-1/12">Total</th>
-                      <th className="p-3 sm:p-4 text-base sm:text-lg font-medium w-1/12">Status</th>
-                      <th className="p-3 sm:p-4 text-base sm:text-lg font-medium w-1/12">
-                        {activeTab === 'Paid Bills' ? 'Paid By' : 'Payment'}
-                      </th>
-                      <th className="p-3 sm:p-4 text-base sm:text-lg font-medium w-3/12">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {filteredOrders.length === 0 ? (
+                <div className="min-h-[360px] max-h-[360px] overflow-y-auto">
+                  <table className="min-w-full text-left">
+                    <thead className="sticky top-0 bg-gray-100">
                       <tr>
-                        <td colSpan="8" className="p-3 sm:p-4 text-center text-gray-600 text-base sm:text-lg">
-                          No {activeTab.toLowerCase()} found.
-                        </td>
+                        <th className="p-3 sm:p-4 text-base sm:text-lg font-medium w-1/12">Table</th>
+                        <th className="p-3 sm:p-4 text-base sm:text-lg font-medium w-1/12">Order #</th>
+                        <th className="p-3 sm:p-4 text-base sm:text-lg font-medium w-1/12 hidden md:table-cell">Date</th>
+                        <th className="p-3 sm:p-4 text-base sm:text-lg font-medium w-3/12">Items</th>
+                        <th className="p-3 sm:p-4 text-base sm:text-lg font-medium w-1/12">Total</th>
+                        <th className="p-3 sm:p-4 text-base sm:text-lg font-medium w-1/12">Status</th>
+                        <th className="p-3 sm:p-4 text-base sm:text-lg font-medium w-1/12">
+                          {activeTab === 'Paid Bills' ? 'Paid By' : 'Payment'}
+                        </th>
+                        <th className="p-3 sm:p-4 text-base sm:text-lg font-medium w-3/12">Actions</th>
                       </tr>
-                    ) : (
-                      filteredOrders.map(order => (
-                        <tr
-                          key={order._id}
-                          className={`border-b hover:bg-amber-50 ${
-                            newOrderIds.has(order._id) ? 'bg-amber-100 border-l-4 border-amber-500' : ''
-                          }`}
-                        >
-                          <td className="p-3 sm:p-4 text-base sm:text-lg">Table {order.tableNumber}</td>
-                          <td className="p-3 sm:p-4 text-base sm:text-lg">#{order.orderNumber}</td>
-                          <td className="p-3 sm:p-4 text-base sm:text-lg hidden md:table-cell">
-                            {new Date(order.createdAt).toLocaleDateString()}
-                          </td>
-                          <td className="p-3 sm:p-4 text-base sm:text-lg relative">
-                            <button
-                              className="text-blue-600 hover:underline"
-                              onMouseEnter={(e) => {
-                                setShowItemsPopover(order._id);
-                                const rect = e.target.getBoundingClientRect();
-                                const popover = document.getElementById(`popover-${order._id}`);
-                                if (popover) {
-                                  const viewportHeight = window.innerHeight;
-                                  const spaceBelow = viewportHeight - rect.bottom;
-                                  const spaceAbove = rect.top;
-                                  const popoverHeight = popover.offsetHeight;
-                                  if (spaceBelow >= popoverHeight || spaceBelow > spaceAbove) {
-                                    popover.style.top = `${rect.bottom + window.scrollY}px`;
-                                    popover.style.transform = 'translateY(8px)';
-                                  } else {
-                                    popover.style.top = `${rect.top + window.scrollY - popoverHeight}px`;
-                                    popover.style.transform = 'translateY(-8px)';
-                                  }
-                                  popover.style.left = `${rect.left + window.scrollX}px`;
-                                }
-                              }}
-                              onMouseLeave={() => setShowItemsPopover(null)}
-                              aria-label={`View items for order ${order.orderNumber}`}
-                            >
-                              {renderItems(order.items)}
-                            </button>
-                            {showItemsPopover === order._id && (
-                              <div
-                                id={`popover-${order._id}`}
-                                className="absolute z-20 bg-white border rounded-lg shadow-md p-4 max-w-xs w-full"
-                                style={{ minWidth: '200px' }}
-                              >
-                                <ul className="list-disc pl-5 space-y-1">
-                                  {order.items.map((item, index) => (
-                                    <li key={index} className="text-sm sm:text-base">
-                                      {item.quantity} x {item.itemId ? item.itemId.name : '[Deleted]'} (₹
-                                      {(item.quantity * (item.itemId ? item.itemId.price : 0)).toFixed(2)})
-                                    </li>
-                                  ))}
-                                </ul>
-                              </div>
-                            )}
-                          </td>
-                          <td className="p-3 sm:p-4 text-base sm:text-lg">
-                            ₹{order.items
-                              .reduce((sum, item) => sum + (item.itemId ? item.quantity * item.itemId.price : 0), 0)
-                              .toFixed(2)}
-                          </td>
-                          <td
-                            className={`p-3 sm:p-4 text-base sm:text-lg ${
-                              order.status === 'Pending'
-                                ? 'text-red-600'
-                                : order.status === 'Prepared'
-                                ? 'text-green-600'
-                                : 'text-blue-600'
-                            }`}
-                          >
-                            {order.status === 'Pending' ? 'New' : order.status === 'Prepared' ? 'Served' : 'Paid'}
-                          </td>
-                          <td className="p-3 sm:p-4 text-base sm:text-lg">
-                            {activeTab === 'Paid Bills' ? paymentMethodBadge(order.paymentMethod || 'Unknown') : 'Not Paid'}
-                          </td>
-                          <td className="p-3 sm:p-4 flex flex-wrap gap-2">
-                            <button
-                              className="px-3 py-2 sm:px-4 sm:py-2 rounded-lg text-white text-base hover:bg-blue-700 transition-colors"
-                              style={{ backgroundColor: '#2563eb' }}
-                              onClick={() => handleEditOrder(order)}
-                              aria-label={`Edit order ${order.orderNumber}`}
-                            >
-                              <FaEdit />
-                            </button>
-                            {order.status === 'Pending' && (
-                              <>
-                                <button
-                                  className="px-3 py-2 sm:px-4 sm:py-2 rounded-lg text-white text-base hover:bg-green-700 transition-colors"
-                                  style={{ backgroundColor: '#16a34a' }}
-                                  onClick={() => handleStatusUpdate(order._id, 'Prepared')}
-                                  aria-label={`Mark order ${order.orderNumber} as served`}
-                                >
-                                  <FaCheck />
-                                </button>
-                                <button
-                                  className="px-3 py-2 sm:px-4 sm:py-2 rounded-lg text-white text-base hover:bg-red-700 transition-colors"
-                                  style={{ backgroundColor: '#dc2626' }}
-                                  onClick={() => handleCancelOrder(order._id)}
-                                  aria-label={`Cancel order ${order.orderNumber}`}
-                                >
-                                  <FaTimes />
-                                </button>
-                              </>
-                            )}
-                            {order.status === 'Prepared' && (
-                              <>
-                                <button
-                                  className="px-3 py-2 sm:px-4 sm:py-2 rounded-lg text-white text-base hover:bg-blue-600 transition-colors"
-                                  style={{ backgroundColor: '#1e40af' }}
-                                  onClick={() => handlePrintBill(order)}
-                                  aria-label={`Print receipt for order ${order.orderNumber}`}
-                                >
-                                  <FaPrint />
-                                </button>
-                                <button
-                                  className="px-3 py-2 sm:px-4 sm:py-2 rounded-lg text-white text-base hover:bg-green-700 transition-colors"
-                                  style={{ backgroundColor: '#16a34a' }}
-                                  onClick={() => setShowPaymentModal(order._id)}
-                                  aria-label={`Mark order ${order.orderNumber} as paid`}
-                                >
-                                  <FaCheck />
-                                </button>
-                              </>
-                            )}
-                            {order.status === 'Completed' && (
-                              <button
-                                className="px-3 py-2 sm:px-4 sm:py-2 rounded-lg text-white text-base hover:bg-blue-600 transition-colors"
-                                style={{ backgroundColor: '#1e40af' }}
-                                onClick={() => handlePrintBill(order)}
-                                aria-label={`Print receipt for order ${order.orderNumber}`}
-                              >
-                                <FaPrint />
-                              </button>
-                            )}
-                          </td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
+                    </thead>
+                    <tbody>
+                      {renderTableRows()}
+                    </tbody>
+                  </table>
+                </div>
               </div>
             </div>
           )}
