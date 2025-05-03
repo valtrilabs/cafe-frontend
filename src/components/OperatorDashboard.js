@@ -539,7 +539,7 @@ function OperatorDashboard() {
               const popover = document.getElementById(`popover-${orderId}`);
               if (popover) {
                 const viewportHeight = window.innerHeight;
-                const viewportWidth = window.innerWidth;
+                const viewportWidth = window.innerHeight;
                 const popoverHeight = popover.offsetHeight || 200;
                 const popoverWidth = popover.offsetWidth || 200;
                 let top = rect.bottom + window.scrollY + 8;
@@ -1152,7 +1152,7 @@ function OperatorDashboard() {
                     <FaEdit className="mr-3 text-amber-600 text-xl" /> Edit Order #{editingOrder.orderNumber}
                   </h2>
                 </div>
-                <div className="flex-1 overflow-y-auto p-6">
+                <div className="flex-1 p-6 overflow-y-auto">
                   <div className="space-y-6">
                     <div>
                       <label className="block text-gray-700 text-base font-medium" htmlFor="edit-table-number">Table Number</label>
@@ -1231,6 +1231,7 @@ function OperatorDashboard() {
                             ]
                           });
                         }}
+                        disabled={!menuItems.length}
                         aria-label="Add new item to order"
                       >
                         <FaPlus className="mr-2 text-lg" /> Add Item
