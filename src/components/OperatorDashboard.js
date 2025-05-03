@@ -36,7 +36,7 @@ function OperatorDashboard() {
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
   const [pendingKOTs, setPendingKOTs] = useState([]);
   const modalRef = useRef(null);
-  const paymentModalRef = useRef चाहिए(null);
+  const paymentModalRef = useRef (null);
 
   const fetchOrders = async (tab) => {
     try {
