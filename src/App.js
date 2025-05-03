@@ -38,6 +38,7 @@ function App() {
         <Route path="/operator" element={<OperatorDashboard />} />
         <Route path="/payment" element={<PaymentDashboard />} />
         <Route path="/waiter" element={<WaiterOrder />} />
+        <Route path="/qr" element={<QRCodeGenerator />} />
         <Route path="/" element={<ScanQR />} />
       </Routes>
     </Router>

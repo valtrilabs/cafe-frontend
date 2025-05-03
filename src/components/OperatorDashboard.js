@@ -34,6 +34,7 @@ function OperatorDashboard() {
   const [showItemsPopover, setShowItemsPopover] = useState(null);
   const [showPaymentModal, setShowPaymentModal] = useState(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState('');
+  const [pendingKOTs, setPendingKOTs] = useState([]); // State for pending KOTs
   const modalRef = useRef(null);
   const paymentModalRef = useRef(null);
 
@@ -106,17 +107,108 @@ function OperatorDashboard() {
     }
   };
 
+  // Fetch pending KOTs for printing
+  const fetchPendingKOTs = async () => {
+    try {
+      const res = await axios.get('https://cafe-backend-ay2n.onrender.com/api/orders/pending-kots');
+      setPendingKOTs(res.data);
+    } catch (err) {
+      console.error('Error fetching pending KOTs:', err);
+      setError('Cannot load pending KOTs.');
+    }
+  };
+
+  // Mark KOT as printed
+  const markKOTPrinted = async (orderId, printer) => {
+    try {
+      await axios.post('https://cafe-backend-ay2n.onrender.com/api/orders/mark-kot-printed', {
+        orderId,
+        printer
+      });
+    } catch (err) {
+      console.error(`Error marking KOT as printed for ${printer}:`, err);
+      setError(`Failed to mark KOT as printed for ${printer}.`);
+    }
+  };
+
+  // Print KOT using a hidden iframe
+  const printKOT = (order, printer, kotContent) => {
+    const iframe = document.createElement('iframe');
+    document.body.appendChild(iframe);
+    iframe.style.display = 'none';
+
+    const doc = iframe.contentWindow.document;
+    doc.open();
+    doc.write(`
+      <html>
+        <head>
+          <style>
+            body {
+              font-family: 'Courier New', monospace;
+              font-size: 12px;
+              width: 80mm;
+              margin: 0;
+              padding: 5mm;
+              line-height: 1.2;
+            }
+            pre {
+              margin: 0;
+              white-space: pre-wrap;
+              word-wrap: break-word;
+            }
+            @media print {
+              @page {
+                size: 80mm auto;
+                margin: 0;
+              }
+              body {
+                margin: 0;
+              }
+            }
+          </style>
+        </head>
+        <body>
+          <pre>${kotContent}</pre>
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    iframe.contentWindow.focus();
+    iframe.contentWindow.print();
+
+    // Mark KOT as printed after printing
+    setTimeout(() => {
+      markKOTPrinted(order._id, printer);
+      document.body.removeChild(iframe);
+    }, 1000); // Delay to ensure printing is triggered
+  };
+
   useEffect(() => {
     fetchOrders(activeTab);
     fetchMenuItems();
     fetchRevenue();
+    fetchPendingKOTs();
     const interval = setInterval(() => {
       console.log(`Refreshing orders for ${activeTab} at ${new Date().toISOString()}`);
       fetchOrders(activeTab);
+      fetchPendingKOTs(); // Poll for pending KOTs
       if (activeTab === 'Paid Bills') fetchRevenue();
     }, 15000);
     return () => clearInterval(interval);
   }, [activeTab]);
+
+  // Print pending KOTs when they are fetched
+  useEffect(() => {
+    pendingKOTs.forEach(order => {
+      if (order.kotPrinter1 && !order.kotPrinter1.printed) {
+        printKOT(order, 'Printer 1', order.kotPrinter1.content);
+      }
+      if (order.kotPrinter2 && !order.kotPrinter2.printed) {
+        printKOT(order, 'Printer 2', order.kotPrinter2.content);
+      }
+    });
+  }, [pendingKOTs]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -1056,8 +1148,8 @@ function OperatorDashboard() {
                       <FaTimes className="mr-2 text-lg" /> Cancel
                     </button>
                     <button
-                      className="px-4 py-2 rounded-lg text-white text-base font-medium flex items-center justify-center hover:bg-amber-600 transition-colors shadow-sm"
-                      style={{ backgroundColor: '#b45309' }}
+                      className="px-4 py-2 rounded-lg text-white text-base font-medium flex items-center justify-center hover:bg-green-700 transition-colors shadow-sm"
+                      style={{ backgroundColor: '#16a34a' }}
                       onClick={() => handleMarkAsPaid(showPaymentModal)}
                       aria-label="Confirm payment"
                     >
@@ -1071,52 +1163,117 @@ function OperatorDashboard() {
 
           {editingOrder && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div ref={modalRef} className="bg-white rounded-lg p-4 w-full max-w-md h-[500px] flex flex-col">
+              <div ref={modalRef} className="bg-white rounded-lg p-4 sm:p-6 w-full max-w-2xl h-[80vh] flex flex-col">
                 <div className="p-2 border-b">
-                  <h2 className="text-base font-bold flex items-center text-gray-800">
-                    <FaEdit className="mr-2 text-amber-600 text-lg" /> Edit Order - Table {editingOrder.tableNumber}
+                  <h2 className="text-xl sm:text-2xl font-bold flex items-center text-gray-800">
+                    <FaEdit className="mr-3 text-amber-600 text-2xl sm:text-3xl" /> Edit Order #{editingOrder.orderNumber}
                   </h2>
                 </div>
-                <div className="p-2 flex-1">
-                  <div className="space-y-2">
+                <div className="p-4 sm:p-6 flex-1" style={{ overflowY: 'auto' }}>
+                  <div className="space-y-4 sm:space-y-6">
                     <div>
-                      <label className="block text-gray-700 text-sm font-medium" htmlFor="table-number">Table Number</label>
+                      <label className="block text-gray-700 text-base sm:text-lg font-medium" htmlFor="edit-table-number">Table Number</label>
                       <input
-                        id="table-number"
+                        id="edit-table-number"
                         type="number"
-                        min="1"
                         value={editingOrder.tableNumber}
-                        onChange={e => setEditingOrder({ ...editingOrder, tableNumber: parseInt(e.target.value) || 1 })}
-                        className="w-full border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-amber-500 bg-white"
-                        aria-label="Change table number"
+                        onChange={e => setEditingOrder({ ...editingOrder, tableNumber: parseInt(e.target.value) })}
+                        className="w-full border rounded-lg px-3 py-2 sm:px-4 sm:py-3 text-base sm:text-lg focus:ring-2 focus:ring-amber-500 bg-white shadow-sm"
+                        required
+                        aria-label="Table number"
                       />
                     </div>
-                    {(editingOrder.status === 'Pending' || editingOrder.status === 'Prepared') && (
+                    <div>
+                      <h3 className="text-base sm:text-lg font-medium text-gray-700 mb-2">Items</h3>
+                      {editingOrder.items.map((item, index) => (
+                        <div key={index} className="flex flex-col sm:flex-row gap-2 sm:gap-4 mb-2 items-start sm:items-center">
+                          <select
+                            value={item.itemId}
+                            onChange={e => {
+                              const newItems = [...editingOrder.items];
+                              const selectedItem = menuItems.find(i => i._id === e.target.value);
+                              newItems[index] = {
+                                ...newItems[index],
+                                itemId: e.target.value,
+                                name: selectedItem.name,
+                                price: selectedItem.price
+                              };
+                              setEditingOrder({ ...editingOrder, items: newItems });
+                            }}
+                            className="w-full sm:w-1/2 border rounded-lg px-3 py-2 sm:px-4 sm:py-2 text-base sm:text-lg focus:ring-2 focus:ring-amber-500 bg-white shadow-sm"
+                            aria-label={`Select item ${index + 1}`}
+                          >
+                            {menuItems.map(menuItem => (
+                              <option key={menuItem._id} value={menuItem._id}>
+                                {menuItem.name} (₹{menuItem.price.toFixed(2)})
+                              </option>
+                            ))}
+                          </select>
+                          <input
+                            type="number"
+                            value={item.quantity}
+                            onChange={e => {
+                              const newItems = [...editingOrder.items];
+                              newItems[index] = { ...newItems[index], quantity: parseInt(e.target.value) };
+                              setEditingOrder({ ...editingOrder, items: newItems });
+                            }}
+                            className="w-full sm:w-1/4 border rounded-lg px-3 py-2 sm:px-4 sm:py-2 text-base sm:text-lg focus:ring-2 focus:ring-amber-500 bg-white shadow-sm"
+                            min="1"
+                            aria-label={`Quantity for item ${index + 1}`}
+                          />
+                          <button
+                            className="px-3 py-1 sm:py-2 rounded-lg text-white text-base hover:bg-red-700 transition-colors shadow-sm"
+                            style={{ backgroundColor: '#dc2626' }}
+                            onClick={() => {
+                              const newItems = editingOrder.items.filter((_, i) => i !== index);
+                              setEditingOrder({ ...editingOrder, items: newItems });
+                            }}
+                            aria-label={`Remove item ${index + 1}`}
+                          >
+                            <FaTrash />
+                          </button>
+                        </div>
+                      ))}
+                      <button
+                        className="mt-2 px-4 py-2 rounded-lg text-white text-base sm:text-lg font-medium flex items-center hover:bg-amber-600 transition-colors shadow-sm"
+                        style={{ backgroundColor: '#b45309' }}
+                        onClick={() => {
+                          setEditingOrder({
+                            ...editingOrder,
+                            items: [
+                              ...editingOrder.items,
+                              { itemId: menuItems[0]._id, quantity: 1, name: menuItems[0].name, price: menuItems[0].price }
+                            ]
+                          });
+                        }}
+                        aria-label="Add new item to order"
+                      >
+                        <FaPlus className="mr-2 text-lg sm:text-xl" /> Add Item
+                      </button>
+                    </div>
+                    <div>
+                      <label className="block text-gray-700 text-base sm:text-lg font-medium">Status</label>
+                      <select
+                        value={editingOrder.status}
+                        onChange={e => setEditingOrder({ ...editingOrder, status: e.target.value })}
+                        className="w-full border rounded-lg px-3 py-2 sm:px-4 sm:py-3 text-base sm:text-lg focus:ring-2 focus:ring-amber-500 bg-white shadow-sm"
+                        aria-label="Select order status"
+                      >
+                        <option value="Pending">Pending</option>
+                        <option value="Prepared">Prepared</option>
+                        <option value="Completed">Completed</option>
+                      </select>
+                    </div>
+                    {editingOrder.status === 'Completed' && (
                       <div>
-                        <label className="block text-gray-700 text-sm font-medium" htmlFor="order-status">Order Status</label>
+                        <label className="block text-gray-700 text-base sm:text-lg font-medium" htmlFor="edit-payment-method">Payment Method</label>
                         <select
-                          id="order-status"
-                          value={editingOrder.status}
-                          onChange={e => setEditingOrder({ ...editingOrder, status: e.target.value })}
-                          className="w-full border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-amber-500 bg-white"
-                          aria-label="Change order status"
-                        >
-                          <option value="Pending">New</option>
-                          <option value="Prepared">Served</option>
-                          <option value="Completed">Paid</option>
-                        </select>
-                      </div>
-                    )}
-                    {editingOrder.status !== 'Pending' && (
-                      <div>
-                        <label className="block text-gray-700 text-sm font-medium" htmlFor="payment-method">Paid By</label>
-                        <select
-                          id="payment-method"
+                          id="edit-payment-method"
                           value={editingOrder.paymentMethod}
                           onChange={e => setEditingOrder({ ...editingOrder, paymentMethod: e.target.value })}
-                          className="w-full border rounded px-2 py-1 text-sm focus:ring-2 focus:ring-amber-500 bg-white"
+                          className="w-full border rounded-lg px-3 py-2 sm:px-4 sm:py-3 text-base sm:text-lg focus:ring-2 focus:ring-amber-500 bg-white shadow-sm"
+                          required
                           aria-label="Select payment method"
-                          disabled={editingOrder.status === 'Prepared'}
                         >
                           <option value="">Select Payment Method</option>
                           <option value="Cash">Cash</option>
@@ -1126,96 +1283,25 @@ function OperatorDashboard() {
                         </select>
                       </div>
                     )}
-                    <div>
-                      <label className="block text-gray-700 text-sm font-medium mb-1">Items</label>
-                      <div style={{ height: '300px', overflowY: 'auto', border: '1px solid #d1d5db', borderRadius: '0.375rem', padding: '0.5rem' }}>
-                        {editingOrder.items.map((item, index) => (
-                          <div key={index} style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginBottom: '0.5rem', minHeight: '40px' }}>
-                            <select
-                              style={{ width: '200px', border: '1px solid #d1d5db', borderRadius: '0.25rem', padding: '0.25rem' }}
-                              value={item.itemId}
-                              onChange={e => {
-                                const newItem = menuItems.find(m => m._id === e.target.value) || { _id: e.target.value, name: 'Unknown Item', price: 0 };
-                                const newItems = [...editingOrder.items];
-                                newItems[index] = {
-                                  ...newItems[index],
-                                  itemId: newItem._id,
-                                  name: newItem.name,
-                                  price: newItem.price
-                                };
-                                setEditingOrder({ ...editingOrder, items: newItems });
-                              }}
-                              aria-label={`Select item ${index + 1}`}
-                            >
-                              {menuItems.length > 0 ? (
-                                menuItems.map(menuItem => (
-                                  <option key={menuItem._id} value={menuItem._id}>
-                                    {menuItem.name} (₹{menuItem.price.toFixed(2)})
-                                  </option>
-                                ))
-                              ) : (
-                                <option value={item.itemId}>{item.name} (₹{item.price.toFixed(2)})</option>
-                              )}
-                            </select>
-                            <input
-                              type="number"
-                              min="1"
-                              style={{ width: '60px', border: '1px solid #d1d5db', borderRadius: '0.25rem', padding: '0.25rem' }}
-                              value={item.quantity}
-                              onChange={e => {
-                                const newItems = [...editingOrder.items];
-                                newItems[index].quantity = parseInt(e.target.value) || 1;
-                                setEditingOrder({ ...editingOrder, items: newItems });
-                              }}
-                              aria-label={`Quantity for item ${index + 1}`}
-                            />
-                            <button
-                              style={{ color: '#dc2626' }}
-                              onClick={() => {
-                                const newItems = editingOrder.items.filter((_, i) => i !== index);
-                                setEditingOrder({ ...editingOrder, items: newItems });
-                              }}
-                              aria-label={`Remove item ${index + 1}`}
-                            >
-                              <FaTrash />
-                            </button>
-                          </div>
-                        ))}
-                        <button
-                          style={{ color: '#2563eb', display: 'flex', alignItems: 'center' }}
-                          onClick={() => {
-                            const defaultItem = menuItems[0] || { _id: 'fallback-id', name: 'Default Item', price: 0 };
-                            const newItems = [
-                              ...editingOrder.items,
-                              { itemId: defaultItem._id, quantity: 1, name: defaultItem.name, price: defaultItem.price }
-                            ];
-                            setEditingOrder({ ...editingOrder, items: newItems });
-                          }}
-                          aria-label="Add new item to order"
-                        >
-                          <FaPlus style={{ marginRight: '0.25rem' }} /> Add Item
-                        </button>
-                      </div>
-                    </div>
                   </div>
                 </div>
-                <div className="p-2 border-t">
-                  <div className="flex justify-end gap-2">
+                <div className="p-2 sm:p-4 border-t">
+                  <div className="flex flex-col sm:flex-row justify-end gap-4">
                     <button
-                      className="px-6 py-2 rounded text-white text-sm font-medium flex items-center hover:bg-gray-600"
-                      style={{ backgroundColor: '#6b7280' }}
+                      className="px-4 py-2 sm:px-6 sm:py-3 rounded-lg text-white text-base sm:text-lg font-medium flex items-center justify-center hover:bg-gray-700 transition-colors shadow-sm"
+                      style={{ backgroundColor: '#4b5563' }}
                       onClick={() => setEditingOrder(null)}
-                      aria-label="Cancel changes"
+                      aria-label="Cancel edit"
                     >
-                      <FaTimes className="mr-1" /> Cancel
+                      <FaTimes className="mr-2 text-lg sm:text-xl" /> Cancel
                     </button>
                     <button
-                      className="px-6 py-2 rounded text-white text-sm font-medium flex items-center hover:bg-amber-700"
-                      style={{ backgroundColor: '#d97706' }}
+                      className="px-4 py-2 sm:px-6 sm:py-3 rounded-lg text-white text-base sm:text-lg font-medium flex items-center justify-center hover:bg-amber-600 transition-colors shadow-sm"
+                      style={{ backgroundColor: '#b45309' }}
                       onClick={handleSaveEdit}
                       aria-label="Save changes"
                     >
-                      <FaCheck className="mr-1" /> Save
+                      <FaCheck className="mr-2 text-lg sm:text-xl" /> Save
                     </button>
                   </div>
                 </div>
