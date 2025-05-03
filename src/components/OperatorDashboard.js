@@ -1146,7 +1146,7 @@ function OperatorDashboard() {
 
           {editingOrder && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div ref={modalRef} className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-lg border border-gray-100">
+              <div ref={modalRef} className="bg-white rounded-xl w-full max-w-2xl h-[90vh] max-h-[90vh] flex flex-col shadow-lg border border-gray-100">
                 <div className="p-6 border-b border-gray-200">
                   <h2 className="text-xl font-semibold flex items-center text-gray-800">
                     <FaEdit className="mr-3 text-amber-600 text-xl" /> Edit Order #{editingOrder.orderNumber}
@@ -1239,7 +1239,6 @@ function OperatorDashboard() {
                     <div>
                       <label className="block text-gray-700 text-base font-medium">Status</label>
                       <select
- RAW Paste Data
                         value={editingOrder.status}
                         onChange={e => setEditingOrder({ ...editingOrder, status: e.target.value })}
                         className="w-full border rounded-lg px-4 py-2 text-base focus:ring-2 focus:ring-amber-400 bg-white shadow-sm border-gray-200"
