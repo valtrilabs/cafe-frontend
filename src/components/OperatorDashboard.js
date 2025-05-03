@@ -1165,7 +1165,7 @@ function OperatorDashboard() {
                       aria-label="Table number"
                     />
                   </div>
-                  <div className="flex-1">
+                  <div>
                     <h3 className="text-base font-medium text-gray-700 mb-2">Items</h3>
                     <div className="max-h-[40vh] overflow-y-auto pr-2">
                       <div className="space-y-4">
