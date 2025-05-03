@@ -844,7 +844,7 @@ function OperatorDashboard() {
                         type="checkbox"
                         checked={newItem.isAvailable}
                         onChange={e => setNewItem({ ...newItem, isAvailable: e.target.checked })}
-                        className="mr-3 h-4 w-4 text-amber-600 border-gray-300 rounded focus:ring-amber-400"
+                        className="mr-3 h-4 w-4 textocial-amber-600 border-gray-300 rounded focus:ring-amber-400"
                         aria-label="Item available"
                       />
                       <span className="text-gray-700 text-base">Available for Sale</span>
@@ -1146,13 +1146,13 @@ function OperatorDashboard() {
 
           {editingOrder && (
             <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-              <div ref={modalRef} className="bg-white rounded-xl p-6 w-full max-w-2xl max-h-[90vh] flex flex-col shadow-lg border border-gray-100">
-                <div className="border-b pb-4">
+              <div ref={modalRef} className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-lg border border-gray-100">
+                <div className="p-6 border-b border-gray-200">
                   <h2 className="text-xl font-semibold flex items-center text-gray-800">
                     <FaEdit className="mr-3 text-amber-600 text-xl" /> Edit Order #{editingOrder.orderNumber}
                   </h2>
                 </div>
-                <div className="flex-1 overflow-y-auto py-4">
+                <div className="flex-1 overflow-y-auto p-6">
                   <div className="space-y-6">
                     <div>
                       <label className="block text-gray-700 text-base font-medium" htmlFor="edit-table-number">Table Number</label>
@@ -1239,6 +1239,7 @@ function OperatorDashboard() {
                     <div>
                       <label className="block text-gray-700 text-base font-medium">Status</label>
                       <select
+ RAW Paste Data
                         value={editingOrder.status}
                         onChange={e => setEditingOrder({ ...editingOrder, status: e.target.value })}
                         className="w-full border rounded-lg px-4 py-2 text-base focus:ring-2 focus:ring-amber-400 bg-white shadow-sm border-gray-200"
@@ -1270,7 +1271,7 @@ function OperatorDashboard() {
                     )}
                   </div>
                 </div>
-                <div className="border-t pt-4">
+                <div className="p-6 border-t border-gray-200">
                   <div className="flex justify-end gap-4">
                     <button
                       className="px-4 py-2 rounded-lg text-gray-700 text-base font-medium flex items-center justify-center hover:bg-gray-100 transition-colors duration-200 shadow-sm border border-gray-200"

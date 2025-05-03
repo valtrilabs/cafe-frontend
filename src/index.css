@@ -13,3 +13,8 @@
     color: #b45309 !important;
     margin-bottom: 1rem !important;
   } */
+
+  @import url('https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap');
+body {
+  font-family: 'Roboto', sans-serif;
+}
