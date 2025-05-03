@@ -1152,22 +1152,22 @@ function OperatorDashboard() {
                     <FaEdit className="mr-3 text-amber-600 text-xl" /> Edit Order #{editingOrder.orderNumber}
                   </h2>
                 </div>
-                <div className="flex-1 p-6 overflow-y-auto">
-                  <div className="space-y-6">
-                    <div>
-                      <label className="block text-gray-700 text-base font-medium" htmlFor="edit-table-number">Table Number</label>
-                      <input
-                        id="edit-table-number"
-                        type="number"
-                        value={editingOrder.tableNumber}
-                        onChange={e => setEditingOrder({ ...editingOrder, tableNumber: parseInt(e.target.value) })}
-                        className="w-full border rounded-lg px-4 py-2 text-base focus:ring-2 focus:ring-amber-400 bg-white shadow-sm border-gray-200"
-                        required
-                        aria-label="Table number"
-                      />
-                    </div>
-                    <div>
-                      <h3 className="text-base font-medium text-gray-700 mb-2">Items</h3>
+                <div className="flex-1 p-6 flex flex-col gap-6">
+                  <div>
+                    <label className="block text-gray-700 text-base font-medium" htmlFor="edit-table-number">Table Number</label>
+                    <input
+                      id="edit-table-number"
+                      type="number"
+                      value={editingOrder.tableNumber}
+                      onChange={e => setEditingOrder({ ...editingOrder, tableNumber: parseInt(e.target.value) })}
+                      className="w-full border rounded-lg px-4 py-2 text-base focus:ring-2 focus:ring-amber-400 bg-white shadow-sm border-gray-200"
+                      required
+                      aria-label="Table number"
+                    />
+                  </div>
+                  <div className="flex-1">
+                    <h3 className="text-base font-medium text-gray-700 mb-2">Items</h3>
+                    <div className="max-h-[40vh] overflow-y-auto pr-2">
                       <div className="space-y-4">
                         {editingOrder.items.map((item, index) => (
                           <div key={index} className="flex flex-col sm:flex-row gap-3 items-start sm:items-center">
@@ -1219,57 +1219,57 @@ function OperatorDashboard() {
                           </div>
                         ))}
                       </div>
-                      <button
-                        className="mt-4 px-4 py-2 rounded-lg text-white text-base font-medium flex items-center hover:bg-amber-600 transition-colors duration-200 shadow-sm"
-                        style={{ backgroundColor: '#d97706' }}
-                        onClick={() => {
-                          setEditingOrder({
-                            ...editingOrder,
-                            items: [
-                              ...editingOrder.items,
-                              { itemId: menuItems[0]._id, quantity: 1, name: menuItems[0].name, price: menuItems[0].price }
-                            ]
-                          });
-                        }}
-                        disabled={!menuItems.length}
-                        aria-label="Add new item to order"
-                      >
-                        <FaPlus className="mr-2 text-lg" /> Add Item
-                      </button>
                     </div>
+                    <button
+                      className="mt-4 px-4 py-2 rounded-lg text-white text-base font-medium flex items-center hover:bg-amber-600 transition-colors duration-200 shadow-sm"
+                      style={{ backgroundColor: '#d97706' }}
+                      onClick={() => {
+                        setEditingOrder({
+                          ...editingOrder,
+                          items: [
+                            ...editingOrder.items,
+                            { itemId: menuItems[0]._id, quantity: 1, name: menuItems[0].name, price: menuItems[0].price }
+                          ]
+                        });
+                      }}
+                      disabled={!menuItems.length}
+                      aria-label="Add new item to order"
+                    >
+                      <FaPlus className="mr-2 text-lg" /> Add Item
+                    </button>
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 text-base font-medium">Status</label>
+                    <select
+                      value={editingOrder.status}
+                      onChange={e => setEditingOrder({ ...editingOrder, status: e.target.value })}
+                      className="w-full border rounded-lg px-4 py-2 text-base focus:ring-2 focus:ring-amber-400 bg-white shadow-sm border-gray-200"
+                      aria-label="Select order status"
+                    >
+                      <option value="Pending">Pending</option>
+                      <option value="Prepared">Prepared</option>
+                      <option value="Completed">Completed</option>
+                    </select>
+                  </div>
+                  {editingOrder.status === 'Completed' && (
                     <div>
-                      <label className="block text-gray-700 text-base font-medium">Status</label>
+                      <label className="block text-gray-700 text-base font-medium" htmlFor="edit-payment-method">Payment Method</label>
                       <select
-                        value={editingOrder.status}
-                        onChange={e => setEditingOrder({ ...editingOrder, status: e.target.value })}
+                        id="edit-payment-method"
+                        value={editingOrder.paymentMethod}
+                        onChange={e => setEditingOrder({ ...editingOrder, paymentMethod: e.target.value })}
                         className="w-full border rounded-lg px-4 py-2 text-base focus:ring-2 focus:ring-amber-400 bg-white shadow-sm border-gray-200"
-                        aria-label="Select order status"
+                        required
+                        aria-label="Select payment method"
                       >
-                        <option value="Pending">Pending</option>
-                        <option value="Prepared">Prepared</option>
-                        <option value="Completed">Completed</option>
+                        <option value="">Select Payment Method</option>
+                        <option value="Cash">Cash</option>
+                        <option value="UPI">UPI</option>
+                        <option value="Card">Card</option>
+                        <option value="Other">Other</option>
                       </select>
                     </div>
-                    {editingOrder.status === 'Completed' && (
-                      <div>
-                        <label className="block text-gray-700 text-base font-medium" htmlFor="edit-payment-method">Payment Method</label>
-                        <select
-                          id="edit-payment-method"
-                          value={editingOrder.paymentMethod}
-                          onChange={e => setEditingOrder({ ...editingOrder, paymentMethod: e.target.value })}
-                          className="w-full border rounded-lg px-4 py-2 text-base focus:ring-2 focus:ring-amber-400 bg-white shadow-sm border-gray-200"
-                          required
-                          aria-label="Select payment method"
-                        >
-                          <option value="">Select Payment Method</option>
-                          <option value="Cash">Cash</option>
-                          <option value="UPI">UPI</option>
-                          <option value="Card">Card</option>
-                          <option value="Other">Other</option>
-                        </select>
-                      </div>
-                    )}
-                  </div>
+                  )}
                 </div>
                 <div className="p-6 border-t border-gray-200">
                   <div className="flex justify-end gap-4">
