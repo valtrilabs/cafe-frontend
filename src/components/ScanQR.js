@@ -6,12 +6,20 @@ function ScanQR() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
-  const tableNumber = queryParams.get('table'); // Changed from 'tableNumber' to 'table'
-  const [status, setStatus] = useState('loading'); // Possible states: 'loading', 'success', 'error'
+  const tableNumber = queryParams.get('table');
+  const token = queryParams.get('token');
+
+  // Log for debugging
+  console.log('Current URL:', window.location.href);
+  console.log('Query Parameters:', Object.fromEntries(queryParams));
+  console.log('Extracted tableNumber:', tableNumber);
+  console.log('Extracted token:', token);
+
+  const [status, setStatus] = useState('loading');
   const [message, setMessage] = useState('Processing QR code...');
 
   useEffect(() => {
-    const createSession = async () => {
+    const validateAndCreateSession = async () => {
       // Validate tableNumber
       if (!tableNumber || isNaN(tableNumber) || Number(tableNumber) < 1) {
         setStatus('error');
@@ -19,7 +27,27 @@ function ScanQR() {
         return;
       }
 
+      // Validate token
+      if (!token) {
+        setStatus('error');
+        setMessage('Missing token. Please scan a valid QR code or contact the cafe staff.');
+        return;
+      }
+
       try {
+        // Validate the token using the backend endpoint
+        const validateResponse = await axios.get(
+          `https://cafe-backend-ay2n.onrender.com/api/sessions/validate?token=${token}`
+        );
+        const { tableNumber: validatedTable } = validateResponse.data;
+
+        if (Number(tableNumber) !== validatedTable) {
+          setStatus('error');
+          setMessage('Table number does not match the session. Please scan the correct QR code.');
+          return;
+        }
+
+        // If token is valid, create a new session
         const response = await axios.post('https://cafe-backend-ay2n.onrender.com/api/sessions', {
           tableNumber: Number(tableNumber),
         });
@@ -28,17 +56,16 @@ function ScanQR() {
         navigate(`/order?sessionId=${sessionId}&tableNumber=${tableNumber}`);
       } catch (err) {
         setStatus('error');
-        const errorMessage = err.response?.data?.message || err.message || 'Unknown error';
+        const errorMessage = err.response?.data?.error || err.message || 'Unknown error';
         setMessage(
-          `Failed to create session: ${errorMessage}. Please try again or contact the cafe staff.`
+          `Failed to validate or create session: ${errorMessage}. Please try again or contact the cafe staff.`
         );
       }
     };
 
-    createSession();
-  }, [tableNumber, navigate]);
+    validateAndCreateSession();
+  }, [tableNumber, token, navigate]);
 
-  // If redirected back with a message in location.state, use it
   const displayMessage = location.state?.message || message;
 
   return (

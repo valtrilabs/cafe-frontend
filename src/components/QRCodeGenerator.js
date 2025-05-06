@@ -41,7 +41,7 @@ function QRCodeGenerator() {
         {Object.entries(tokens).map(([table, token]) => (
           <div key={table} style={{ margin: '20px' }}>
             <h3>Table {table}</h3>
-            <QRCodeCanvas value={`https://cafe-frontend-pi.vercel.app/order?table=${table}&token=${token}`} />
+            <QRCodeCanvas value={`https://cafe-frontend-pi.vercel.app/scan-qr?table=${table}&token=${token}`} />
           </div>
         ))}
       </div>
