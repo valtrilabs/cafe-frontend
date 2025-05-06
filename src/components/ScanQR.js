@@ -6,57 +6,35 @@ function ScanQR() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
-  const tableNumber = queryParams.get('table');
+  const tableNumber = queryParams.get('table'); // Looking for 'table' as per QR code URL
 
-  // Log for debugging
+  // Log the entire URL and query parameters for debugging
   console.log('Current URL:', window.location.href);
   console.log('Query Parameters:', Object.fromEntries(queryParams));
   console.log('Extracted tableNumber:', tableNumber);
 
-  const [status, setStatus] = useState('loading');
+  const [status, setStatus] = useState('loading'); // Possible states: 'loading', 'success', 'error'
   const [message, setMessage] = useState('Processing QR code...');
 
   useEffect(() => {
     const createSession = async () => {
       // Validate tableNumber
-      console.log('Validating tableNumber...');
-      if (!tableNumber) {
-        console.log('tableNumber is missing or null');
-        setStatus('error');
-        setMessage('Invalid table number. Please scan a valid QR code or contact the cafe staff.');
-        return;
-      }
-      console.log('tableNumber exists, checking if it is a number...');
-      if (isNaN(tableNumber)) {
-        console.log('tableNumber is not a number:', tableNumber);
-        setStatus('error');
-        setMessage('Invalid table number. Please scan a valid QR code or contact the cafe staff.');
-        return;
-      }
-      console.log('tableNumber is a number, checking if it is positive...');
-      if (Number(tableNumber) < 1) {
-        console.log('tableNumber is less than 1:', tableNumber);
+      if (!tableNumber || isNaN(tableNumber) || Number(tableNumber) < 1) {
         setStatus('error');
         setMessage('Invalid table number. Please scan a valid QR code or contact the cafe staff.');
         return;
       }
 
       try {
-        console.log('Creating new session...');
         const response = await axios.post('https://cafe-backend-ay2n.onrender.com/api/sessions', {
           tableNumber: Number(tableNumber),
         });
-        console.log('Session creation response:', response.data);
         const sessionId = response.data.sessionId;
-        console.log('New session created, sessionId:', sessionId);
-
         setStatus('success');
-        console.log(`Navigating to /order?sessionId=${sessionId}&tableNumber=${tableNumber}`);
         navigate(`/order?sessionId=${sessionId}&tableNumber=${tableNumber}`);
       } catch (err) {
-        console.error('Error during session creation:', err.response?.data || err.message);
         setStatus('error');
-        const errorMessage = err.response?.data?.error || err.message || 'Unknown error';
+        const errorMessage = err.response?.data?.message || err.message || 'Unknown error';
         setMessage(
           `Failed to create session: ${errorMessage}. Please try again or contact the cafe staff.`
         );
@@ -66,6 +44,7 @@ function ScanQR() {
     createSession();
   }, [tableNumber, navigate]);
 
+  // If redirected back with a message in location.state, use it
   const displayMessage = location.state?.message || message;
 
   return (

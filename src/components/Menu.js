@@ -43,22 +43,33 @@ function Menu() {
           navigate('/scan-qr', { state: { message: errorMessage } });
           return null;
         }
-        // Wait before retrying
         await new Promise(resolve => setTimeout(resolve, delay));
       }
     }
   };
 
-  const fetchMenu = async () => {
-    try {
-      console.log('Fetching menu...');
-      const response = await axios.get('https://cafe-backend-ay2n.onrender.com/api/menu');
-      console.log('Menu items fetched:', response.data);
-      setMenuItems(response.data);
-      setError(null);
-    } catch (err) {
-      console.error('Error fetching menu:', err.response?.data || err.message);
-      setError('Failed to load menu. Please try again.');
+  const fetchMenu = async (retries = 3, delay = 500) => {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        console.log(`Fetching menu (Attempt ${attempt}/${retries})...`);
+        const response = await axios.get('https://cafe-backend-ay2n.onrender.com/api/menu', {
+          headers: {
+            'x-session-id': sessionId,
+          },
+        });
+        console.log('Menu items fetched:', response.data);
+        setMenuItems(response.data);
+        setError(null);
+        return true;
+      } catch (err) {
+        console.error(`Error fetching menu (Attempt ${attempt}/${retries}):`, err.response?.data || err.message);
+        if (attempt === retries) {
+          const errorMessage = err.response?.data?.error || 'Failed to load menu. Please try again.';
+          setError(errorMessage);
+          return false;
+        }
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
   };
 
@@ -84,7 +95,7 @@ function Menu() {
 
       const result = await validateSession(sessionId);
       if (result) {
-        fetchMenu();
+        await fetchMenu();
       }
     };
 
@@ -92,7 +103,7 @@ function Menu() {
 
     const interval = setInterval(async () => {
       if (sessionId) {
-        const result = await validateSession(sessionId, 1); // No retries for periodic checks
+        const result = await validateSession(sessionId, 1);
         if (!result) {
           setSessionValid(false);
           setSessionMessage('Session expired or order prepared. Please scan QR code again.');
@@ -185,6 +196,10 @@ function Menu() {
         tableNumber: parseInt(tableNumber),
         items: cart.map(item => ({ itemId: item.itemId, quantity: item.quantity })),
         sessionId
+      }, {
+        headers: {
+          'x-session-id': sessionId,
+        },
       });
       console.log('Order placed:', response.data);
       setOrderSummary({
