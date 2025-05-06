@@ -6,7 +6,7 @@ function ScanQR() {
   const navigate = useNavigate();
   const location = useLocation();
   const queryParams = new URLSearchParams(location.search);
-  const tableNumber = queryParams.get('tableNumber');
+  const tableNumber = queryParams.get('table'); // Changed from 'tableNumber' to 'table'
   const [status, setStatus] = useState('loading'); // Possible states: 'loading', 'success', 'error'
   const [message, setMessage] = useState('Processing QR code...');
 
