@@ -46,13 +46,15 @@ function ScanQR() {
         const response = await axios.post('https://cafe-backend-ay2n.onrender.com/api/sessions', {
           tableNumber: Number(tableNumber),
         });
+        console.log('Session creation response:', response.data);
         const sessionId = response.data.sessionId;
         console.log('New session created, sessionId:', sessionId);
 
         setStatus('success');
+        console.log(`Navigating to /order?sessionId=${sessionId}&tableNumber=${tableNumber}`);
         navigate(`/order?sessionId=${sessionId}&tableNumber=${tableNumber}`);
       } catch (err) {
-        console.error('Error during session creation:', err);
+        console.error('Error during session creation:', err.response?.data || err.message);
         setStatus('error');
         const errorMessage = err.response?.data?.error || err.message || 'Unknown error';
         setMessage(

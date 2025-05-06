@@ -20,21 +20,32 @@ function Menu() {
   const tableNumber = queryParams.get('tableNumber') || 'Unknown';
   const sessionId = queryParams.get('sessionId');
 
-  const validateSession = async (sessionId) => {
-    try {
-      console.log(`Validating session with sessionId: ${sessionId}`);
-      const response = await axios.get(`https://cafe-backend-ay2n.onrender.com/api/sessions/${sessionId}`);
-      console.log(`Session validated for table ${response.data.tableNumber}`);
-      setSessionValid(true);
-      setSessionMessage('');
-      return response.data;
-    } catch (err) {
-      console.error('Session validation error:', err.response?.data || err.message);
-      const errorMessage = err.response?.data?.error || 'Invalid session. Please scan the QR code again.';
-      setSessionValid(false);
-      setSessionMessage(errorMessage);
-      navigate('/scan-qr', { state: { message: errorMessage } });
-      return null;
+  console.log('Menu.js - Query Parameters:', Object.fromEntries(queryParams));
+  console.log('Menu.js - Extracted tableNumber:', tableNumber);
+  console.log('Menu.js - Extracted sessionId:', sessionId);
+
+  const validateSession = async (sessionId, retries = 3, delay = 500) => {
+    for (let attempt = 1; attempt <= retries; attempt++) {
+      try {
+        console.log(`Validating session with sessionId: ${sessionId} (Attempt ${attempt}/${retries})`);
+        const response = await axios.get(`https://cafe-backend-ay2n.onrender.com/api/sessions/${sessionId}`);
+        console.log('Session validation response:', response.data);
+        console.log(`Session validated for table ${response.data.tableNumber}`);
+        setSessionValid(true);
+        setSessionMessage('');
+        return response.data;
+      } catch (err) {
+        console.error(`Session validation error (Attempt ${attempt}/${retries}):`, err.response?.data || err.message);
+        if (attempt === retries) {
+          const errorMessage = err.response?.data?.error || 'Invalid session. Please scan the QR code again.';
+          setSessionValid(false);
+          setSessionMessage(errorMessage);
+          navigate('/scan-qr', { state: { message: errorMessage } });
+          return null;
+        }
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
     }
   };
 
@@ -81,7 +92,7 @@ function Menu() {
 
     const interval = setInterval(async () => {
       if (sessionId) {
-        const result = await validateSession(sessionId);
+        const result = await validateSession(sessionId, 1); // No retries for periodic checks
         if (!result) {
           setSessionValid(false);
           setSessionMessage('Session expired or order prepared. Please scan QR code again.');
