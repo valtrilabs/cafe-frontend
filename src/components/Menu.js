@@ -30,9 +30,10 @@ function Menu() {
       return response.data;
     } catch (err) {
       console.error('Session validation error:', err.response?.data || err.message);
+      const errorMessage = err.response?.data?.error || 'Invalid session. Please scan the QR code again.';
       setSessionValid(false);
-      setSessionMessage(err.response?.data?.error || 'Invalid session. Please scan the QR code again.');
-      navigate('/scan-qr', { state: { message: err.response?.data?.error } });
+      setSessionMessage(errorMessage);
+      navigate('/scan-qr', { state: { message: errorMessage } });
       return null;
     }
   };
