@@ -11,16 +11,15 @@ function WaiterOrder() {
   const [error, setError] = useState(null);
   const [addedItemId, setAddedItemId] = useState(null);
   const [orderSummary, setOrderSummary] = useState(null);
-  const [sessionToken, setSessionToken] = useState(null);
-  const [orders, setOrders] = useState([]); // To store active orders for the table
-  const [isViewingOrders, setIsViewingOrders] = useState(false); // Toggle between order taking and viewing
-  const [editingOrderId, setEditingOrderId] = useState(null); // Track the order being edited
+  const [sessionId, setSessionId] = useState(null);
+  const [orders, setOrders] = useState([]);
+  const [isViewingOrders, setIsViewingOrders] = useState(false);
+  const [editingOrderId, setEditingOrderId] = useState(null);
 
-  // Fetch menu items (no authentication required for waiter)
   const fetchMenu = async () => {
     try {
       console.log('Fetching menu for waiter...');
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/menu/operator`);
+      const response = await axios.get('https://cafe-backend-ay2n.onrender.com/api/menu');
       console.log('Menu items fetched:', response.data);
       setMenuItems(response.data);
       setError(null);
@@ -30,15 +29,14 @@ function WaiterOrder() {
     }
   };
 
-  // Create a session for the table
   const createSession = async (tableNum) => {
     try {
       console.log(`Creating session for table ${tableNum}`);
-      const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/sessions`, {
+      const response = await axios.post('https://cafe-backend-ay2n.onrender.com/api/sessions', {
         tableNumber: Number(tableNum)
       });
-      console.log(`Session created: ${response.data.token}`);
-      return response.data.token;
+      console.log(`Session created: ${response.data.sessionId}`);
+      return response.data.sessionId;
     } catch (err) {
       console.error('Error creating session:', err.response?.data || err.message);
       setError('Failed to create session. Please try again.');
@@ -46,14 +44,13 @@ function WaiterOrder() {
     }
   };
 
-  // Fetch active orders for a table
   const fetchOrders = async (tableNum) => {
     try {
       console.log(`Fetching orders for table ${tableNum}`);
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/orders`, {
+      const response = await axios.get('https://cafe-backend-ay2n.onrender.com/api/orders', {
         params: { 
-          status: 'Pending,Prepared', // Comma-separated list of statuses
-          tableNumber: tableNum // Add tableNumber to the query
+          status: 'pending,prepared',
+          tableNumber: tableNum
         }
       });
       console.log('Orders fetched:', response.data);
@@ -65,12 +62,10 @@ function WaiterOrder() {
     }
   };
 
-  // Initialize menu on component mount
   useEffect(() => {
     fetchMenu();
   }, []);
 
-  // Categories for filtering menu items
   const categories = [
     { name: 'All', icon: '🌟' },
     ...[...new Set(menuItems.map(item => item.category).filter(Boolean))]
@@ -90,7 +85,6 @@ function WaiterOrder() {
     ? menuItems
     : menuItems.filter(item => item.category === selectedCategory);
 
-  // Add item to cart
   const addToCart = (item) => {
     try {
       console.log('Adding to cart:', item);
@@ -104,7 +98,7 @@ function WaiterOrder() {
       };
       const itemCategory = item.category || 'Uncategorized';
       const itemImage = item.image
-        ? `${process.env.REACT_APP_API_URL}${item.image}`
+        ? `https://cafe-backend-ay2n.onrender.com${item.image}`
         : placeholderImages[itemCategory] || 'https://source.unsplash.com/100x100/?food';
 
       if (existingItem) {
@@ -131,7 +125,6 @@ function WaiterOrder() {
     }
   };
 
-  // Update item quantity in cart
   const updateQuantity = (itemId, delta) => {
     setCart(cart.map(cartItem =>
       cartItem.itemId === itemId
@@ -140,12 +133,10 @@ function WaiterOrder() {
     ));
   };
 
-  // Remove item from cart
   const removeFromCart = (itemId) => {
     setCart(cart.filter(cartItem => cartItem.itemId !== itemId));
   };
 
-  // Place a new order
   const placeOrder = async () => {
     if (!tableNumber || isNaN(tableNumber) || Number(tableNumber) < 1) {
       setError('Please enter a valid table number.');
@@ -157,19 +148,15 @@ function WaiterOrder() {
     }
 
     try {
-      // Create a session for the table
-      const token = await createSession(tableNumber);
-      if (!token) return;
-      setSessionToken(token);
+      const sessionId = await createSession(tableNumber);
+      if (!sessionId) return;
+      setSessionId(sessionId);
 
-      // Place the order
       console.log('Placing order for table:', tableNumber);
-      const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, {
+      const response = await axios.post('https://cafe-backend-ay2n.onrender.com/api/orders', {
         tableNumber: parseInt(tableNumber),
         items: cart.map(item => ({ itemId: item.itemId, quantity: item.quantity })),
-        token
-      }, {
-        headers: { 'x-session-token': token }
+        sessionId
       });
       console.log('Order placed:', response.data);
       setOrderSummary({
@@ -186,7 +173,6 @@ function WaiterOrder() {
     }
   };
 
-  // Update an existing order
   const updateOrder = async () => {
     if (!editingOrderId) {
       setError('No order selected for editing.');
@@ -199,7 +185,7 @@ function WaiterOrder() {
 
     try {
       console.log(`Updating order ${editingOrderId}`);
-      const response = await axios.put(`${process.env.REACT_APP_API_URL}/api/orders/${editingOrderId}`, {
+      const response = await axios.put(`https://cafe-backend-ay2n.onrender.com/api/orders/${editingOrderId}`, {
         items: cart.map(item => ({ itemId: item.itemId, quantity: item.quantity }))
       });
       console.log('Order updated:', response.data);
@@ -218,7 +204,6 @@ function WaiterOrder() {
     }
   };
 
-  // Start a new order
   const startNewOrder = () => {
     setOrderSummary(null);
     setCart([]);
@@ -230,7 +215,6 @@ function WaiterOrder() {
     setOrders([]);
   };
 
-  // Load an order into the cart for editing
   const editOrder = (order) => {
     const cartItems = order.items.map(item => ({
       itemId: item.itemId._id,
@@ -238,7 +222,7 @@ function WaiterOrder() {
       price: item.itemId.price,
       quantity: item.quantity,
       image: item.itemId.image
-        ? `${process.env.REACT_APP_API_URL}${item.itemId.image}`
+        ? `https://cafe-backend-ay2n.onrender.com${item.itemId.image}`
         : 'https://source.unsplash.com/100x100/?food',
       category: item.itemId.category || 'Uncategorized'
     }));
@@ -387,7 +371,7 @@ function WaiterOrder() {
                         <img
                           src={
                             item.itemId.image
-                              ? `${process.env.REACT_APP_API_URL}${item.itemId.image}`
+                              ? `https://cafe-backend-ay2n.onrender.com${item.itemId.image}`
                               : 'https://source.unsplash.com/100x100/?food'
                           }
                           alt={item.itemId.name}
@@ -510,7 +494,7 @@ function WaiterOrder() {
                 <img
                   src={
                     item.image
-                      ? `${process.env.REACT_APP_API_URL}${item.image}`
+                      ? `https://cafe-backend-ay2n.onrender.com${item.image}`
                       : 'https://source.unsplash.com/100x100/?food'
                   }
                   alt={item.name}

@@ -17,15 +17,13 @@ function Menu() {
   const location = useLocation();
   const navigate = useNavigate();
   const queryParams = new URLSearchParams(location.search);
-  const tableNumber = queryParams.get('table') || 'Unknown';
-  const token = queryParams.get('token');
+  const tableNumber = queryParams.get('tableNumber') || 'Unknown';
+  const sessionId = queryParams.get('sessionId');
 
-  const validateSession = async (sessionToken) => {
+  const validateSession = async (sessionId) => {
     try {
-      console.log(`Validating session with token: ${sessionToken}`);
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/sessions/validate`, {
-        params: { token: sessionToken }
-      });
+      console.log(`Validating session with sessionId: ${sessionId}`);
+      const response = await axios.get(`https://cafe-backend-ay2n.onrender.com/api/sessions/${sessionId}`);
       console.log(`Session validated for table ${response.data.tableNumber}`);
       setSessionValid(true);
       setSessionMessage('');
@@ -39,12 +37,10 @@ function Menu() {
     }
   };
 
-  const fetchMenu = async (sessionToken) => {
+  const fetchMenu = async () => {
     try {
-      console.log(`Fetching menu with token: ${sessionToken}`);
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/menu`, {
-        headers: { 'x-session-token': sessionToken }
-      });
+      console.log('Fetching menu...');
+      const response = await axios.get('https://cafe-backend-ay2n.onrender.com/api/menu');
       console.log('Menu items fetched:', response.data);
       setMenuItems(response.data);
       setError(null);
@@ -54,31 +50,9 @@ function Menu() {
     }
   };
 
-  const createNewSession = async (tableNum, retries = 3) => {
-    for (let attempt = 1; attempt <= retries; attempt++) {
-      try {
-        console.log(`Attempt ${attempt}: Creating new session for table: ${tableNum}`);
-        const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/sessions`, {
-          tableNumber: Number(tableNum)
-        });
-        console.log(`New session created: ${response.data.token}`);
-        return response.data.token;
-      } catch (err) {
-        console.error(`Attempt ${attempt}: Error creating session:`, err.response?.data || err.message);
-        if (attempt === retries) {
-          setSessionValid(false);
-          setSessionMessage('Failed to create session after retries. Please scan the QR code.');
-          navigate('/scan-qr', { state: { message: 'Failed to create session. Please scan the QR code.' } });
-          return null;
-        }
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
-    }
-  };
-
   useEffect(() => {
     const initializeSession = async () => {
-      console.log(`Initializing session. Table: ${tableNumber}, Token: ${token}`);
+      console.log(`Initializing session. Table: ${tableNumber}, SessionId: ${sessionId}`);
       const tableNum = Number(tableNumber);
       if (isNaN(tableNum) || tableNum < 1) {
         console.error('Invalid table number:', tableNumber);
@@ -88,27 +62,25 @@ function Menu() {
         return;
       }
 
-      let sessionToken = token;
-      if (!token) {
-        sessionToken = await createNewSession(tableNum);
-        if (sessionToken) {
-          console.log(`Redirecting to /order?table=${tableNum}&token=${sessionToken}`);
-          navigate(`/order?table=${tableNum}&token=${sessionToken}`, { replace: true });
-        }
+      if (!sessionId) {
+        console.error('Missing sessionId');
+        setSessionValid(false);
+        setSessionMessage('Session ID missing. Please scan the QR code.');
+        navigate('/scan-qr', { state: { message: 'Session ID missing. Please scan the QR code.' } });
         return;
       }
 
-      const result = await validateSession(sessionToken);
+      const result = await validateSession(sessionId);
       if (result) {
-        fetchMenu(sessionToken);
+        fetchMenu();
       }
     };
 
     initializeSession();
 
     const interval = setInterval(async () => {
-      if (token) {
-        const result = await validateSession(token);
+      if (sessionId) {
+        const result = await validateSession(sessionId);
         if (!result) {
           setSessionValid(false);
           setSessionMessage('Session expired or order prepared. Please scan QR code again.');
@@ -117,7 +89,7 @@ function Menu() {
       }
     }, 10000);
     return () => clearInterval(interval);
-  }, [tableNumber, token, navigate]);
+  }, [tableNumber, sessionId, navigate]);
 
   const startNewOrder = () => {
     navigate('/scan-qr');
@@ -155,7 +127,7 @@ function Menu() {
       };
       const itemCategory = item.category || 'Uncategorized';
       const itemImage = item.image
-        ? `${process.env.REACT_APP_API_URL}${item.image}`
+        ? `https://cafe-backend-ay2n.onrender.com${item.image}`
         : placeholderImages[itemCategory] || 'https://source.unsplash.com/100x100/?food';
 
       if (existingItem) {
@@ -197,12 +169,10 @@ function Menu() {
   const placeOrder = async () => {
     try {
       console.log('Placing order for table:', tableNumber);
-      const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, {
+      const response = await axios.post('https://cafe-backend-ay2n.onrender.com/api/orders', {
         tableNumber: parseInt(tableNumber),
         items: cart.map(item => ({ itemId: item.itemId, quantity: item.quantity })),
-        token
-      }, {
-        headers: { 'x-session-token': token }
+        sessionId
       });
       console.log('Order placed:', response.data);
       setOrderSummary({
@@ -296,7 +266,7 @@ function Menu() {
           <button
             className="mt-2 px-3 sm:px-4 py-1 sm:py-2 rounded-lg text-white text-sm"
             style={{ backgroundColor: '#b45309' }}
-            onClick={() => fetchMenu(token)}
+            onClick={() => fetchMenu()}
           >
             Retry
           </button>
@@ -343,7 +313,7 @@ function Menu() {
                 <img
                   src={
                     item.image
-                      ? `${process.env.REACT_APP_API_URL}${item.image}`
+                      ? `https://cafe-backend-ay2n.onrender.com${item.image}`
                       : 'https://source.unsplash.com/100x100/?food'
                   }
                   alt={item.name}

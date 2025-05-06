@@ -1,23 +1,23 @@
 import React from 'react';
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
-import ScanQR from './components/ScanQR';
-import Menu from './components/Menu';
-import OperatorDashboard from './components/OperatorDashboard';
-import PaymentDashboard from './components/PaymentDashboard';
-import WaiterOrder from './components/WaiterOrder';
-import QRCodeGenerator from './components/QRCodeGenerator'; // Added missing import
+import { BrowserRouter as Router, Route, Routes } from 'react-router-dom';
+import OperatorDashboard from './OperatorDashboard';
+import PaymentDashboard from './PaymentDashboard';
+import QRCodeGenerator from './QRCodeGenerator';
+import ScanQR from './ScanQR';
+import Menu from './Menu';
+import WaiterOrder from './WaiterOrder';
 
 function App() {
   return (
     <Router>
       <Routes>
-        <Route path="/scan-qr" element={<ScanQR />} />
-        <Route path="/order" element={<Menu />} />
         <Route path="/operator" element={<OperatorDashboard />} />
         <Route path="/payment" element={<PaymentDashboard />} />
-        <Route path="/waiter" element={<WaiterOrder />} />
         <Route path="/qr" element={<QRCodeGenerator />} />
-        <Route path="/" element={<ScanQR />} />
+        <Route path="/scanqr" element={<ScanQR />} />
+        <Route path="/order" element={<Menu />} />
+        <Route path="/waiter-order" element={<WaiterOrder />} />
+        <Route path="/" element={<div>Welcome to GSaheb Cafe</div>} />
       </Routes>
     </Router>
   );
