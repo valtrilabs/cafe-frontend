@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { FaUtensils, FaRupeeSign, FaEdit, FaShoppingCart } from 'react-icons/fa';
+// import { FaUtensils, FaRupeeSign, FaEdit, FaShoppingCart } from 'react-icons/fa';
+import { FaUtensils, FaRupeeSign, FaEdit, FaShoppingCart, FaMinus, FaPlus, FaTrash } from 'react-icons/fa';
+
 
 function OrderSummary() {
   const [order, setOrder] = useState(null);
