@@ -5,7 +5,8 @@ import Menu from './components/Menu';
 import OperatorDashboard from './components/OperatorDashboard';
 import PaymentDashboard from './components/PaymentDashboard';
 import WaiterOrder from './components/WaiterOrder';
-import QRCodeGenerator from './components/QRCodeGenerator'; // Added missing import
+import QRCodeGenerator from './components/QRCodeGenerator';
+import OrderSummary from './components/OrderSummary';
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
       <Routes>
         <Route path="/scan-qr" element={<ScanQR />} />
         <Route path="/order" element={<Menu />} />
+        <Route path="/summary" element={<OrderSummary />} />
         <Route path="/operator" element={<OperatorDashboard />} />
         <Route path="/payment" element={<PaymentDashboard />} />
         <Route path="/waiter" element={<WaiterOrder />} />

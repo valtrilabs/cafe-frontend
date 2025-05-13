@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { FaShoppingCart, FaUtensils, FaRupeeSign } from 'react-icons/fa';
+import { FaShoppingCart, FaUtensils, FaRupeeSign, FaPlus, FaMinus, FaTrash } from 'react-icons/fa';
 
 function Menu() {
   const [menuItems, setMenuItems] = useState([]);
@@ -10,118 +10,42 @@ function Menu() {
   const [isMiniCartOpen, setIsMiniCartOpen] = useState(false);
   const [error, setError] = useState(null);
   const [addedItemId, setAddedItemId] = useState(null);
-  const [orderSummary, setOrderSummary] = useState(null);
-  const [sessionValid, setSessionValid] = useState(true);
-  const [sessionMessage, setSessionMessage] = useState('');
-
+  const [tableNumber, setTableNumber] = useState(null);
+  const [sessionToken, setSessionToken] = useState(null);
   const location = useLocation();
   const navigate = useNavigate();
-  const queryParams = new URLSearchParams(location.search);
-  const tableNumber = queryParams.get('table') || 'Unknown';
-  const token = queryParams.get('token');
 
-  const validateSession = async (sessionToken) => {
+  const fetchMenu = async () => {
     try {
-      console.log(`Validating session with token: ${sessionToken}`);
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/sessions/validate`, {
-        params: { token: sessionToken }
-      });
-      console.log(`Session validated for table ${response.data.tableNumber}`);
-      setSessionValid(true);
-      setSessionMessage('');
-      return response.data;
-    } catch (err) {
-      console.error('Session validation error:', err.response?.data || err.message);
-      setSessionValid(false);
-      setSessionMessage(err.response?.data?.error || 'Invalid session. Please scan the QR code again.');
-      navigate('/scan-qr', { state: { message: err.response?.data?.error } });
-      return null;
-    }
-  };
-
-  const fetchMenu = async (sessionToken) => {
-    try {
-      console.log(`Fetching menu with token: ${sessionToken}`);
-      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/menu`, {
-        headers: { 'x-session-token': sessionToken }
-      });
-      console.log('Menu items fetched:', response.data);
+      const response = await axios.get(`${process.env.REACT_APP_API_URL}/api/menu`);
       setMenuItems(response.data);
       setError(null);
     } catch (err) {
-      console.error('Error fetching menu:', err.response?.data || err.message);
       setError('Failed to load menu. Please try again.');
     }
   };
 
-  const createNewSession = async (tableNum, retries = 3) => {
-    for (let attempt = 1; attempt <= retries; attempt++) {
-      try {
-        console.log(`Attempt ${attempt}: Creating new session for table: ${tableNum}`);
-        const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/sessions`, {
-          tableNumber: Number(tableNum)
-        });
-        console.log(`New session created: ${response.data.token}`);
-        return response.data.token;
-      } catch (err) {
-        console.error(`Attempt ${attempt}: Error creating session:`, err.response?.data || err.message);
-        if (attempt === retries) {
-          setSessionValid(false);
-          setSessionMessage('Failed to create session after retries. Please scan the QR code.');
-          navigate('/scan-qr', { state: { message: 'Failed to create session. Please scan the QR code.' } });
-          return null;
-        }
-        await new Promise(resolve => setTimeout(resolve, 1000));
-      }
+  const validateSession = async () => {
+    const params = new URLSearchParams(location.search);
+    const table = params.get('table');
+    if (!table || isNaN(table) || table < 1 || table > 6) {
+      navigate('/scan-qr', { state: { message: 'Invalid table number. Please scan the QR code again.' } });
+      return;
+    }
+    try {
+      const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/sessions`, { tableNumber: Number(table) });
+      setTableNumber(Number(table));
+      setSessionToken(response.data.token);
+      setError(null);
+    } catch (err) {
+      navigate('/scan-qr', { state: { message: 'Failed to start session. Please scan the QR code again.' } });
     }
   };
 
   useEffect(() => {
-    const initializeSession = async () => {
-      console.log(`Initializing session. Table: ${tableNumber}, Token: ${token}`);
-      const tableNum = Number(tableNumber);
-      if (isNaN(tableNum) || tableNum < 1) {
-        console.error('Invalid table number:', tableNumber);
-        setSessionValid(false);
-        setSessionMessage('Invalid table number. Please scan the QR code.');
-        navigate('/scan-qr', { state: { message: 'Invalid table number. Please scan the QR code.' } });
-        return;
-      }
-
-      let sessionToken = token;
-      if (!token) {
-        sessionToken = await createNewSession(tableNum);
-        if (sessionToken) {
-          console.log(`Redirecting to /order?table=${tableNum}&token=${sessionToken}`);
-          navigate(`/order?table=${tableNum}&token=${sessionToken}`, { replace: true });
-        }
-        return;
-      }
-
-      const result = await validateSession(sessionToken);
-      if (result) {
-        fetchMenu(sessionToken);
-      }
-    };
-
-    initializeSession();
-
-    const interval = setInterval(async () => {
-      if (token) {
-        const result = await validateSession(token);
-        if (!result) {
-          setSessionValid(false);
-          setSessionMessage('Session expired or order prepared. Please scan QR code again.');
-          navigate('/scan-qr', { state: { message: 'Session expired or order prepared. Please scan QR code again.' } });
-        }
-      }
-    }, 10000);
-    return () => clearInterval(interval);
-  }, [tableNumber, token, navigate]);
-
-  const startNewOrder = () => {
-    navigate('/scan-qr');
-  };
+    validateSession();
+    fetchMenu();
+  }, []);
 
   const categories = [
     { name: 'All', icon: '🌟' },
@@ -143,43 +67,38 @@ function Menu() {
     : menuItems.filter(item => item.category === selectedCategory);
 
   const addToCart = (item) => {
-    try {
-      console.log('Adding to cart:', item);
-      const existingItem = cart.find(cartItem => cartItem.itemId === item._id);
-      const placeholderImages = {
-        'Main Course': 'https://source.unsplash.com/100x100/?sandwich',
-        'Drinks': 'https://source.unsplash.com/100x100/?smoothie',
-        'Street Food': 'https://source.unsplash.com/100x100/?streetfood',
-        'Salads': 'https://source.unsplash.com/100x100/?salad',
-        'Desserts': 'https://source.unsplash.com/100x100/?dessert'
-      };
-      const itemCategory = item.category || 'Uncategorized';
-      const itemImage = item.image
-        ? `${process.env.REACT_APP_API_URL}${item.image}`
-        : placeholderImages[itemCategory] || 'https://source.unsplash.com/100x100/?food';
+    const existingItem = cart.find(cartItem => cartItem.itemId === item._id);
+    const placeholderImages = {
+      'Main Course': 'https://source.unsplash.com/100x100/?sandwich',
+      'Drinks': 'https://source.unsplash.com/100x100/?smoothie',
+      'Street Food': 'https://source.unsplash.com/100x100/?streetfood',
+      'Salads': 'https://source.unsplash.com/100x100/?salad',
+      'Desserts': 'https://source.unsplash.com/100x100/?dessert'
+    };
+    const itemCategory = item.category || 'Uncategorized';
+    const itemImage = item.image
+      ? `${process.env.REACT_APP_API_URL}${item.image}`
+      : placeholderImages[itemCategory] || 'https://source.unsplash.com/100x100/?food';
 
-      if (existingItem) {
-        setCart(cart.map(cartItem =>
-          cartItem.itemId === item._id
-            ? { ...cartItem, quantity: cartItem.quantity + 1 }
-            : cartItem
-        ));
-      } else {
-        setCart([...cart, {
-          itemId: item._id,
-          name: item.name,
-          price: item.price,
-          quantity: 1,
-          image: itemImage,
-          category: itemCategory
-        }]);
-      }
-      setIsMiniCartOpen(true);
-      setAddedItemId(item._id);
-      setTimeout(() => setAddedItemId(null), 1000);
-    } catch (error) {
-      console.error('Error adding to cart:', error);
+    if (existingItem) {
+      setCart(cart.map(cartItem =>
+        cartItem.itemId === item._id
+          ? { ...cartItem, quantity: cartItem.quantity + 1 }
+          : cartItem
+      ));
+    } else {
+      setCart([...cart, {
+        itemId: item._id,
+        name: item.name,
+        price: item.price,
+        quantity: 1,
+        image: itemImage,
+        category: itemCategory
+      }]);
     }
+    setIsMiniCartOpen(true);
+    setAddedItemId(item._id);
+    setTimeout(() => setAddedItemId(null), 1000);
   };
 
   const updateQuantity = (itemId, delta) => {
@@ -195,25 +114,23 @@ function Menu() {
   };
 
   const placeOrder = async () => {
+    if (cart.length === 0) {
+      setError('Cart is empty. Add items to place an order.');
+      return;
+    }
     try {
-      console.log('Placing order for table:', tableNumber);
       const response = await axios.post(`${process.env.REACT_APP_API_URL}/api/orders`, {
-        tableNumber: parseInt(tableNumber),
+        tableNumber,
         items: cart.map(item => ({ itemId: item.itemId, quantity: item.quantity })),
-        token
       }, {
-        headers: { 'x-session-token': token }
-      });
-      console.log('Order placed:', response.data);
-      setOrderSummary({
-        orderNumber: response.data.orderNumber,
-        items: cart,
-        total: cart.reduce((sum, item) => sum + item.price * item.quantity, 0)
+        headers: { 'x-session-token': JSON.stringify({ token: sessionToken, tableNumber }) }
       });
       setCart([]);
       setIsMiniCartOpen(false);
+      navigate(`/summary?orderId=${response.data._id}&table=${tableNumber}&token=${sessionToken}`, {
+        state: { message: 'Your order has been successfully placed! You can view and edit it below.' }
+      });
     } catch (err) {
-      console.error('Error placing order:', err.response?.data || err.message);
       setError('Failed to place order. Please try again.');
     }
   };
@@ -221,53 +138,8 @@ function Menu() {
   const totalPrice = cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
   const itemCount = cart.reduce((sum, item) => sum + item.quantity, 0);
 
-  if (!sessionValid) {
-    return null; // Redirect handled by useEffect
-  }
-
-  if (orderSummary) {
-    return (
-      <div className="min-h-screen bg-orange-50 p-4">
-        <header className="sticky top-0 shadow-lg z-50 border-b-2 border-amber-900" style={{ backgroundColor: '#92400e', color: '#ffffff' }}>
-          <div className="container mx-auto p-2 sm:p-4 flex justify-between items-center">
-            <h1 className="text-lg sm:text-2xl font-bold flex items-center">
-              <FaUtensils className="mr-2" style={{ color: '#fcd34d' }} /> GSaheb Cafe - Table {tableNumber}
-            </h1>
-          </div>
-        </header>
-        <div className="container mx-auto p-4">
-          <h2 className="text-2xl font-bold mb-4">Order Summary</h2>
-          <p className="text-gray-600 mb-4">Your order #{orderSummary.orderNumber} is getting prepared. Please wait 10-15 minutes.</p>
-          <div className="bg-white rounded-lg shadow-md p-4">
-            <h3 className="text-lg font-semibold mb-2">Ordered Items</h3>
-            <ul className="space-y-2">
-              {orderSummary.items.map(item => (
-                <li key={item.itemId} className="flex items-center">
-                  <img src={item.image} alt={item.name} className="w-12 h-12 object-cover rounded mr-3" />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium">{item.name}</p>
-                    <p className="text-sm text-gray-600">{item.quantity} x <FaRupeeSign className="inline mr-1" />{item.price.toFixed(2)}</p>
-                  </div>
-                  <p className="text-sm font-semibold"><FaRupeeSign className="inline mr-1" />{(item.quantity * item.price).toFixed(2)}</p>
-                </li>
-              ))}
-            </ul>
-            <p className="mt-4 text-lg font-bold flex items-center">
-              Total: <FaRupeeSign className="ml-1 mr-1" />{orderSummary.total.toFixed(2)}
-            </p>
-          </div>
-          <div className="mt-4">
-            <button
-              className="w-full sm:w-auto px-4 py-2 rounded-lg text-white flex items-center justify-center"
-              style={{ backgroundColor: '#b45309' }}
-              onClick={startNewOrder}
-            >
-              <FaUtensils className="mr-2" /> Start New Order
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+  if (!tableNumber || !sessionToken) {
+    return null; // Render nothing until session is validated
   }
 
   return (
@@ -278,16 +150,14 @@ function Menu() {
       >
         <div className="container mx-auto p-2 sm:p-4 flex justify-between items-center">
           <h1 className="text-lg sm:text-2xl font-bold flex items-center">
-            <FaUtensils className="mr-2" style={{ color: '#fcd34d' }} /> GSaheb Cafe Menu - Table {tableNumber}
+            <FaUtensils className="mr-2" style={{ color: '#fcd34d' }} /> GSaheb Cafe - Table {tableNumber}
           </h1>
-          <div className="flex items-center space-x-2 sm:space-x-4">
-            <span 
-              className="text-xs sm:text-sm font-medium flex items-center px-2 py-1 rounded-full" 
-              style={{ backgroundColor: '#b45309', color: '#ffffff' }}
-            >
-              <FaShoppingCart className="mr-1 sm:mr-2" style={{ color: '#fcd34d' }} /> Cart: {itemCount} item{itemCount !== 1 ? 's' : ''} (<FaRupeeSign className="inline mr-1" />{totalPrice.toFixed(2)})
-            </span>
-          </div>
+          <span 
+            className="text-xs sm:text-sm font-medium flex items-center px-2 py-1 rounded-full" 
+            style={{ backgroundColor: '#b45309', color: '#ffffff' }}
+          >
+            <FaShoppingCart className="mr-1 sm:mr-2" style={{ color: '#fcd34d' }} /> Cart: {itemCount} item{itemCount !== 1 ? 's' : ''} (<FaRupeeSign className="inline mr-1" />{totalPrice.toFixed(2)})
+          </span>
         </div>
       </header>
       {error && (
@@ -296,39 +166,33 @@ function Menu() {
           <button
             className="mt-2 px-3 sm:px-4 py-1 sm:py-2 rounded-lg text-white text-sm"
             style={{ backgroundColor: '#b45309' }}
-            onClick={() => fetchMenu(token)}
+            onClick={() => { setError(null); fetchMenu(); }}
           >
             Retry
           </button>
         </div>
       )}
       <div className="container mx-auto p-2 sm:p-4">
-        {categories.length === 1 ? (
-          <p className="text-center text-gray-600 text-sm">No categories available.</p>
-        ) : (
-          <div className="flex overflow-x-auto space-x-1 sm:space-x-2 pb-2">
-            {categories.map(category => (
-              <button
-                key={category.name}
-                className={`flex items-center px-3 sm:px-4 py-1 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
-                  selectedCategory === category.name
-                    ? 'shadow-md hover:bg-amber-700'
-                    : 'hover:bg-amber-300'
-                }`}
-                style={{
-                  backgroundColor: selectedCategory === category.name ? '#b45309' : '#fed7aa',
-                  color: selectedCategory === category.name ? '#ffffff' : '#1f2937'
-                }}
-                onClick={() => setSelectedCategory(category.name)}
-              >
-                <span className="mr-1 sm:mr-2">{category.icon}</span>
-                {category.name}
-              </button>
-            ))}
-          </div>
-        )}
-      </div>
-      <div className="container mx-auto p-2 sm:p-4">
+        <div className="flex overflow-x-auto space-x-1 sm:space-x-2 pb-2">
+          {categories.map(category => (
+            <button
+              key={category.name}
+              className={`flex items-center px-3 sm:px-4 py-1 sm:py-2 rounded-full text-xs sm:text-sm font-medium transition-colors whitespace-nowrap ${
+                selectedCategory === category.name
+                  ? 'shadow-md hover:bg-amber-700'
+                  : 'hover:bg-amber-300'
+              }`}
+              style={{
+                backgroundColor: selectedCategory === category.name ? '#b45309' : '#fed7aa',
+                color: selectedCategory === category.name ? '#ffffff' : '#1f2937'
+              }}
+              onClick={() => setSelectedCategory(category.name)}
+            >
+              <span className="mr-1 sm:mr-2">{category.icon}</span>
+              {category.name}
+            </button>
+          ))}
+        </div>
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 xl:grid-cols-5 gap-2 sm:gap-3">
           {filteredItems.length === 0 ? (
             <p className="text-center col-span-full text-gray-600 text-sm">
@@ -389,7 +253,7 @@ function Menu() {
           <div className="container mx-auto p-2 sm:p-4">
             <div className="flex justify-between items-center">
               <h2 className="text-lg sm:text-xl font-bold text-gray-800 flex items-center">
-                <FaShoppingCart className="mr-1 sm:mr-2" /> Your Cart ({itemCount} item{itemCount !== 1 ? 's' : ''})
+                <FaShoppingCart className="mr-1 sm:mr-2" /> Cart ({itemCount} item{itemCount !== 1 ? 's' : ''})
               </h2>
               <button
                 className="text-gray-600 hover:text-gray-800 focus:outline-none text-sm sm:text-base"
@@ -421,14 +285,14 @@ function Menu() {
                               className="px-1 sm:px-2 py-0.5 sm:py-1 bg-gray-200 rounded-l hover:bg-gray-300 focus:ring-2 focus:ring-gray-400 text-xs sm:text-sm"
                               onClick={() => updateQuantity(item.itemId, -1)}
                             >
-                              -
+                              <FaMinus />
                             </button>
                             <span className="px-2 sm:px-3 py-0.5 sm:py-1 bg-gray-100 text-xs sm:text-sm">{item.quantity}</span>
                             <button
                               className="px-1 sm:px-2 py-0.5 sm:py-1 bg-gray-200 rounded-r hover:bg-gray-300 focus:ring-2 focus:ring-gray-400 text-xs sm:text-sm"
                               onClick={() => updateQuantity(item.itemId, 1)}
                             >
-                              +
+                              <FaPlus />
                             </button>
                           </div>
                         </div>
@@ -441,7 +305,7 @@ function Menu() {
                             className="text-red-500 hover:text-red-700 text-xs focus:outline-none"
                             onClick={() => removeFromCart(item.itemId)}
                           >
-                            Remove
+                            <FaTrash />
                           </button>
                         </div>
                       </div>
@@ -458,7 +322,7 @@ function Menu() {
                     onClick={placeOrder}
                     disabled={cart.length === 0}
                   >
-                    <FaUtensils className="mr-1 sm:mr-2" /> Order Now
+                    <FaUtensils className="mr-1 sm:mr-2" /> Place Order
                   </button>
                 </div>
               </div>
