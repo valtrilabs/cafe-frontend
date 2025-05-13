@@ -1,6 +1,7 @@
 import React from 'react';
-     import { QRCode } from 'qrcode.react';
-     import { saveAs } from 'file-saver';
+    //  import { QRCode } from 'qrcode.react';
+    import QRCode from 'qrcode.react';
+    import { saveAs } from 'file-saver';
 
      function QRCodeGenerator() {
        const frontendUrl = process.env.REACT_APP_FRONTEND_URL || 'https://cafe-frontend-pi.vercel.app';
