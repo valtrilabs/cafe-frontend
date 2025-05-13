@@ -1,6 +1,7 @@
 import React from 'react';
     //  import { QRCode } from 'qrcode.react';
-    import QRCode from 'qrcode.react';
+    //import QRCode from 'qrcode.react';
+    import { QRCodeCanvas } from 'qrcode.react';
     import { saveAs } from 'file-saver';
 
      function QRCodeGenerator() {
@@ -21,7 +22,7 @@ import React from 'react';
              {tables.map((table) => (
                <div key={table} className="bg-white p-4 rounded-lg shadow-md text-center">
                  <h2 className="text-lg font-semibold mb-2">Table {table}</h2>
-                 <QRCode
+                 <QRCodeCanvas
                    id={`qr-code-${table}`}
                    value={`${frontendUrl}/order?table=${table}`}
                    size={200}
