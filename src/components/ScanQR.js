@@ -4,7 +4,7 @@ import { useLocation } from 'react-router-dom';
 
 function ScanQR() {
   const location = useLocation();
-  const message = location.state?.message || 'Please scan the QR code on your table to access the menu and place an order.';
+  const message = location.state?.message || 'Please scan the QR code for your table to access the menu.';
 
   return (
     <div className="min-h-screen bg-orange-50 flex items-center justify-center p-4">
@@ -13,7 +13,7 @@ function ScanQR() {
           <FaQrcode className="mr-2" style={{ color: '#b45309' }} /> Scan QR Code
         </h1>
         <p className="text-gray-600 mb-4">{message}</p>
-        <p className="text-gray-600">If you need assistance, please contact the cafe staff.</p>
+        <p className="text-gray-600">If you believe this is an error, contact the cafe staff.</p>
       </div>
     </div>
   );
